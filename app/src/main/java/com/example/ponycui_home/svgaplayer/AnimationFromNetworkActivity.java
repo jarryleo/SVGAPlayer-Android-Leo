@@ -31,7 +31,6 @@ public class AnimationFromNetworkActivity extends Activity {
     private void loadAnimation() {
         try { // new URL needs try catch.
             SVGAParser svgaParser = SVGAParser.Companion.shareParser();
-            svgaParser.setFrameSize(100,100);
             svgaParser.decodeFromURL(new URL("https://github.com/yyued/SVGA-Samples/blob/master/posche.svga?raw=true"), new SVGAParser.ParseCompletion() {
                 @Override
                 public void onComplete(@NotNull SVGAVideoEntity videoItem) {

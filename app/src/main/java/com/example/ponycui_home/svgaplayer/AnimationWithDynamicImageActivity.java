@@ -5,6 +5,7 @@ import android.graphics.Color;
 import android.os.Bundle;
 import android.support.annotation.Nullable;
 
+import com.opensource.svgaplayer.SVGAConfig;
 import com.opensource.svgaplayer.SVGADrawable;
 import com.opensource.svgaplayer.SVGADynamicEntity;
 import com.opensource.svgaplayer.SVGAImageView;
@@ -13,7 +14,6 @@ import com.opensource.svgaplayer.SVGAVideoEntity;
 
 import org.jetbrains.annotations.NotNull;
 
-import java.io.File;
 import java.net.MalformedURLException;
 import java.net.URL;
 
@@ -33,7 +33,7 @@ public class AnimationWithDynamicImageActivity extends Activity {
     private void loadAnimation() {
         try { // new URL needs try catch.
             SVGAParser parser = new SVGAParser(this);
-            parser.decodeFromURL(new URL("https://github.com/yyued/SVGA-Samples/blob/master/kingset.svga?raw=true"), new SVGAParser.ParseCompletion() {
+            parser.decodeFromURL(new URL("https://github.com/yyued/SVGA-Samples/blob/master/kingset.svga?raw=true"),new SVGAConfig(), new SVGAParser.ParseCompletion() {
                 @Override
                 public void onComplete(@NotNull SVGAVideoEntity videoItem) {
                     SVGADynamicEntity dynamicEntity = new SVGADynamicEntity();

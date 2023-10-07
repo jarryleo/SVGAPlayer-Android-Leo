@@ -47,7 +47,6 @@ public class AnimationFromAssetsActivity extends Activity {
         //asset jojo_audio.svga  cannot callback
         String name = "mp3_to_long.svga";
         Log.d("SVGA", "## name " + name);
-        svgaParser.setFrameSize(100, 100);
         svgaParser.decodeFromAssets(name, new SVGAParser.ParseCompletion() {
             @Override
             public void onComplete(@NotNull SVGAVideoEntity videoItem) {
