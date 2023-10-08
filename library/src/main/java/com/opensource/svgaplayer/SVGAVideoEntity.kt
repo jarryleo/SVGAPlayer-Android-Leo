@@ -7,8 +7,6 @@ import android.media.SoundPool
 import android.os.Build
 import com.opensource.svgaplayer.bitmap.SVGABitmapByteArrayDecoder
 import com.opensource.svgaplayer.bitmap.SVGABitmapFileDecoder
-import com.opensource.svgaplayer.cache.IMemoryCache
-import com.opensource.svgaplayer.cache.MemoryCacheKey
 import com.opensource.svgaplayer.cache.SVGACache
 import com.opensource.svgaplayer.entities.SVGAAudioEntity
 import com.opensource.svgaplayer.entities.SVGAVideoSpriteEntity
@@ -21,14 +19,13 @@ import org.json.JSONObject
 import java.io.File
 import java.io.FileInputStream
 import java.io.FileOutputStream
-import java.net.URL
 import java.util.*
 import kotlin.collections.ArrayList
 
 /**
  * Created by PonyCui on 16/6/18.
  */
-class SVGAVideoEntity : IMemoryCache {
+class SVGAVideoEntity {
 
     private val TAG = "SVGAVideoEntity"
 
@@ -55,12 +52,16 @@ class SVGAVideoEntity : IMemoryCache {
     private var mPlayCallback: SVGAParser.PlayCallback? = null
     private lateinit var mCallback: () -> Unit
 
-    constructor(json: JSONObject, cacheDir: File) : this(json, cacheDir, 0, 0)
+    /** 内存缓存Key */
+    private var mMemoryCacheKey: String? = null
 
-    constructor(json: JSONObject, cacheDir: File, frameWidth: Int, frameHeight: Int) {
+    constructor(json: JSONObject, cacheDir: File) : this(json, cacheDir, 0, 0, null)
+
+    constructor(json: JSONObject, cacheDir: File, frameWidth: Int, frameHeight: Int, memoryCacheKey: String?) {
         mFrameWidth = frameWidth
         mFrameHeight = frameHeight
         mCacheDir = cacheDir
+        mMemoryCacheKey = memoryCacheKey
         val movieJsonObject = json.optJSONObject("movie") ?: return
         setupByJson(movieJsonObject)
         try {
@@ -83,12 +84,13 @@ class SVGAVideoEntity : IMemoryCache {
         frames = movieObject.optInt("frames", 0)
     }
 
-    constructor(entity: MovieEntity, cacheDir: File) : this(entity, cacheDir, 0, 0)
+    constructor(entity: MovieEntity, cacheDir: File) : this(entity, cacheDir, 0, 0, null)
 
-    constructor(entity: MovieEntity, cacheDir: File, frameWidth: Int, frameHeight: Int) {
+    constructor(entity: MovieEntity, cacheDir: File, frameWidth: Int, frameHeight: Int, memoryCacheKey: String?) {
         this.mFrameWidth = frameWidth
         this.mFrameHeight = frameHeight
         this.mCacheDir = cacheDir
+        this.mMemoryCacheKey = mMemoryCacheKey
         this.movieItem = entity
         entity.params?.let(this::setupByMovie)
         try {
@@ -353,22 +355,8 @@ class SVGAVideoEntity : IMemoryCache {
         imageMap.clear()
     }
 
-
-    /************* 内存缓存 **************/
-
-    private var memoryCacheKey: MemoryCacheKey? = null
-
-    override fun getCacheKey(): MemoryCacheKey? {
-        return memoryCacheKey
+    fun getMemoryCacheKey(): String? {
+        return mMemoryCacheKey
     }
-
-    override fun setCacheKey(key: MemoryCacheKey) {
-        this.memoryCacheKey = key
-    }
-
-    fun removeDy(){
-
-    }
-
 }
 

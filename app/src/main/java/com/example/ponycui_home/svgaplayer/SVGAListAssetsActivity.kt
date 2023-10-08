@@ -45,20 +45,16 @@ class SVGAListAssetsActivity : Activity() {
 
     private fun SVGAImageView?.loadAssets(path: String?) {
         if (this == null || path.isNullOrEmpty()) {
-            Log.e("lyd", "error: " + (this == null) + " " + (path.isNullOrEmpty()))
             return
         }
         val svgaParser = shareParser()
-        Log.d("lyd", "## name $path")
         svgaParser.decodeFromAssets(path, config = SVGAConfig(frameWidth = 0, frameHeight = 0), object : ParseCompletion {
             override fun onComplete(videoItem: SVGAVideoEntity) {
-                Log.e("lyd", "onComplete: ")
                 setVideoItem(videoItem)
                 stepToFrame(0, true)
             }
 
             override fun onError() {
-                Log.e("lyd", "onComplete: ")
             }
         }, null)
     }

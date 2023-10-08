@@ -6,6 +6,7 @@ import android.annotation.SuppressLint
 import android.content.Context
 import android.os.Build
 import android.util.AttributeSet
+import android.util.Log
 import android.view.MotionEvent
 import android.view.View
 import android.view.animation.LinearInterpolator
@@ -43,7 +44,7 @@ open class SVGAImageView @JvmOverloads constructor(
             level = DeprecationLevel.WARNING
     )
     var clearsAfterStop = false
-    var clearsAfterDetached = false
+    var clearsAfterDetached = true
     var fillMode: FillMode = FillMode.Forward
     var callback: SVGACallback? = null
 
@@ -67,7 +68,7 @@ open class SVGAImageView @JvmOverloads constructor(
         val typedArray = context.theme.obtainStyledAttributes(attrs, R.styleable.SVGAImageView, 0, 0)
         loops = typedArray.getInt(R.styleable.SVGAImageView_loopCount, 0)
         clearsAfterStop = typedArray.getBoolean(R.styleable.SVGAImageView_clearsAfterStop, false)
-        clearsAfterDetached = typedArray.getBoolean(R.styleable.SVGAImageView_clearsAfterDetached, false)
+        clearsAfterDetached = typedArray.getBoolean(R.styleable.SVGAImageView_clearsAfterDetached, true)
         mAntiAlias = typedArray.getBoolean(R.styleable.SVGAImageView_antiAlias, true)
         mAutoPlay = typedArray.getBoolean(R.styleable.SVGAImageView_autoPlay, true)
         typedArray.getString(R.styleable.SVGAImageView_fillMode)?.let {

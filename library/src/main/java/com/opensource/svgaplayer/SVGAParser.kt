@@ -4,6 +4,8 @@ import android.content.Context
 import android.net.http.HttpResponseCache
 import android.os.Handler
 import android.os.Looper
+import com.opensource.svgaplayer.cache.SVGACache
+import com.opensource.svgaplayer.cache.SVGAMemoryCache
 import com.opensource.svgaplayer.proto.MovieEntity
 import com.opensource.svgaplayer.utils.log.LogUtils
 import org.json.JSONObject
@@ -141,6 +143,12 @@ class SVGAParser(context: Context?) {
             return
         }
         LogUtils.info(TAG, "================ decode $name from assets ================")
+        //加载内存缓存数据
+        val memoryCacheKey: String? = if (config.isCacheToMemory) SVGAMemoryCache.crateKey(name, config) else null
+        if (decodeFromMemoryCacheKey(memoryCacheKey, config, callback, playCallback, name)) {
+            return
+        }
+        //加载Assets数据
         threadPoolExecutor.execute {
             try {
                 mContext?.assets?.open(name)?.let {
@@ -151,6 +159,7 @@ class SVGAParser(context: Context?) {
                         callback,
                         true,
                         playCallback,
+                        memoryCacheKey,
                         alias = name
                     )
                 }
@@ -181,18 +190,23 @@ class SVGAParser(context: Context?) {
         }
         val urlPath = url.toString()
         LogUtils.info(TAG, "================ decode from url: $urlPath ================")
+        //加载内存缓存数据
+        val memoryCacheKey: String? = if (config.isCacheToMemory) SVGAMemoryCache.crateKey(urlPath, config) else null
+        if (decodeFromMemoryCacheKey(memoryCacheKey, config, callback, playCallback, urlPath)) {
+            return null
+        }
         val cacheKey = SVGACache.buildCacheKey(url);
-        return if (SVGACache.isCached(cacheKey)) {
+        return if (SVGACache.isCached(cacheKey)) { //加载本地缓存数据
             LogUtils.info(TAG, "this url cached")
             threadPoolExecutor.execute {
                 if (SVGACache.isDefaultCache()) {
-                    this.decodeFromCacheKey(cacheKey, config, callback, alias = urlPath)
+                    this.decodeFromCacheKey(cacheKey, config, callback, memoryCacheKey, alias = urlPath)
                 } else {
-                    this.decodeFromSVGAFileCacheKey(cacheKey, config, callback, playCallback, alias = urlPath)
+                    this.decodeFromSVGAFileCacheKey(cacheKey, config, callback, playCallback, memoryCacheKey, alias = urlPath)
                 }
             }
             return null
-        } else {
+        } else { //加载网络数据（下载资源）
             LogUtils.info(TAG, "no cached, prepare to download")
             fileDownloader.resume(url, {
                 this.decodeFromInputStream(
@@ -202,6 +216,7 @@ class SVGAParser(context: Context?) {
                     callback,
                     false,
                     playCallback,
+                    memoryCacheKey,
                     alias = urlPath
                 )
             }, {
@@ -222,6 +237,7 @@ class SVGAParser(context: Context?) {
         config: SVGAConfig,
         callback: ParseCompletion?,
         playCallback: PlayCallback?,
+        memoryCacheKey: String?,
         alias: String? = null
     ) {
         threadPoolExecutor.execute {
@@ -230,7 +246,7 @@ class SVGAParser(context: Context?) {
                 FileInputStream(SVGACache.buildSvgaFile(cacheKey)).use { inputStream ->
                     readAsBytes(inputStream)?.let { bytes ->
                         if (isZipFile(bytes)) {
-                            this.decodeFromCacheKey(cacheKey, config, callback, alias)
+                            this.decodeFromCacheKey(cacheKey, config, callback, memoryCacheKey, alias)
                         } else {
                             LogUtils.info(TAG, "inflate start")
                             inflate(bytes)?.let {
@@ -239,7 +255,8 @@ class SVGAParser(context: Context?) {
                                     MovieEntity.ADAPTER.decode(it),
                                     File(cacheKey),
                                     config.frameWidth,
-                                    config.frameHeight
+                                    config.frameHeight,
+                                    memoryCacheKey
                                 )
                                 LogUtils.info(TAG, "SVGAVideoEntity prepare start")
                                 videoItem.prepare({
@@ -274,6 +291,7 @@ class SVGAParser(context: Context?) {
         callback: ParseCompletion?,
         closeInputStream: Boolean = false,
         playCallback: PlayCallback? = null,
+        memoryCacheKey: String?,
         alias: String? = null
     ) {
         if (mContext == null) {
@@ -299,7 +317,7 @@ class SVGAParser(context: Context?) {
                                 }
                             }
                         }
-                        this.decodeFromCacheKey(cacheKey, config, callback, alias)
+                        this.decodeFromCacheKey(cacheKey, config, callback, memoryCacheKey, alias)
                     } else {
                         if (!SVGACache.isDefaultCache()) {
                             // 如果 SVGACache 设置类型为 FILE
@@ -322,7 +340,8 @@ class SVGAParser(context: Context?) {
                                 MovieEntity.ADAPTER.decode(it),
                                 File(cacheKey),
                                 config.frameWidth,
-                                config.frameHeight
+                                config.frameHeight,
+                                memoryCacheKey
                             )
                             LogUtils.info(TAG, "SVGAVideoEntity prepare start")
                             videoItem.prepare({
@@ -377,9 +396,10 @@ class SVGAParser(context: Context?) {
         cacheKey: String,
         config: SVGAConfig,
         callback: ParseCompletion?,
-        closeInputStream: Boolean = false
+        closeInputStream: Boolean = false,
+        memoryCacheKey: String?
     ) {
-        this.decodeFromInputStream(inputStream, cacheKey, config, callback, closeInputStream, null)
+        this.decodeFromInputStream(inputStream, cacheKey, config, callback, closeInputStream, null, memoryCacheKey)
     }
 
     private fun invokeCompleteCallback(
@@ -410,6 +430,7 @@ class SVGAParser(context: Context?) {
         cacheKey: String,
         config: SVGAConfig,
         callback: ParseCompletion?,
+        memoryCacheKey: String?,
         alias: String?
     ) {
         LogUtils.info(TAG, "================ decode $alias from cache ================")
@@ -430,7 +451,8 @@ class SVGAParser(context: Context?) {
                                 MovieEntity.ADAPTER.decode(it),
                                 cacheDir,
                                 config.frameWidth,
-                                config.frameHeight
+                                config.frameHeight,
+                                memoryCacheKey
                             ),
                             callback,
                             alias
@@ -465,7 +487,8 @@ class SVGAParser(context: Context?) {
                                             it,
                                             cacheDir,
                                             config.frameWidth,
-                                            config.frameHeight
+                                            config.frameHeight,
+                                            memoryCacheKey
                                         ),
                                         callback,
                                         alias
@@ -483,6 +506,30 @@ class SVGAParser(context: Context?) {
             }
         } catch (e: Exception) {
             this.invokeErrorCallback(e, callback, alias)
+        }
+    }
+
+    /**
+     * 加载内存缓存
+     * @return true内部已将数据通过接口返回，不用再加载
+     */
+    private fun decodeFromMemoryCacheKey(
+        memoryCacheKey: String?,
+        config: SVGAConfig,
+        callback: ParseCompletion?,
+        playCallback: PlayCallback?,
+        alias: String?
+    ): Boolean {
+        return if (config.isCacheToMemory && !memoryCacheKey.isNullOrEmpty()) { //加载内存缓存
+            //缓存数据为空
+            val entity = SVGAMemoryCache.INSTANCE.getData(memoryCacheKey) ?: return false
+            entity.prepare({
+                LogUtils.info(TAG, "decodeFromMemoryCacheKey prepare success")
+                this.invokeCompleteCallback(entity, callback, alias = alias)
+            }, playCallback)
+            true
+        } else {
+            false
         }
     }
 
