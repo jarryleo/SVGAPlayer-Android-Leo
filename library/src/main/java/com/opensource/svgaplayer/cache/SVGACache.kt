@@ -1,13 +1,14 @@
-package com.opensource.svgaplayer
+package com.opensource.svgaplayer.cache
 
 import android.content.Context
+import com.opensource.svgaplayer.SVGAParser
 import com.opensource.svgaplayer.utils.log.LogUtils
 import java.io.File
 import java.net.URL
 import java.security.MessageDigest
 
 /**
- * SVGA 缓存管理
+ * SVGA 缓存管理（文件缓存）
  */
 object SVGACache {
     enum class Type {
@@ -38,7 +39,7 @@ object SVGACache {
         context ?: return
         cacheDir = "${context.cacheDir.absolutePath}/svga/"
         File(cacheDir).takeIf { !it.exists() }?.mkdirs()
-        this.type = type
+        SVGACache.type = type
     }
 
     /**

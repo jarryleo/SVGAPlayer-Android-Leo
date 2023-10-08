@@ -212,6 +212,8 @@ open class SVGAImageView @JvmOverloads constructor(
     fun clear() {
         getSVGADrawable()?.cleared = true
         getSVGADrawable()?.clear()
+        //清理动态添加的数据
+        getSVGADrawable()?.dynamicItem?.clearDynamicObjects()
         // 清除对 drawable 的引用
         setImageDrawable(null)
     }

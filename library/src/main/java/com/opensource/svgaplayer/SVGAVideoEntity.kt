@@ -7,6 +7,9 @@ import android.media.SoundPool
 import android.os.Build
 import com.opensource.svgaplayer.bitmap.SVGABitmapByteArrayDecoder
 import com.opensource.svgaplayer.bitmap.SVGABitmapFileDecoder
+import com.opensource.svgaplayer.cache.IMemoryCache
+import com.opensource.svgaplayer.cache.MemoryCacheKey
+import com.opensource.svgaplayer.cache.SVGACache
 import com.opensource.svgaplayer.entities.SVGAAudioEntity
 import com.opensource.svgaplayer.entities.SVGAVideoSpriteEntity
 import com.opensource.svgaplayer.proto.AudioEntity
@@ -18,13 +21,14 @@ import org.json.JSONObject
 import java.io.File
 import java.io.FileInputStream
 import java.io.FileOutputStream
+import java.net.URL
 import java.util.*
 import kotlin.collections.ArrayList
 
 /**
  * Created by PonyCui on 16/6/18.
  */
-class SVGAVideoEntity {
+class SVGAVideoEntity : IMemoryCache {
 
     private val TAG = "SVGAVideoEntity"
 
@@ -48,7 +52,7 @@ class SVGAVideoEntity {
     private var mCacheDir: File
     private var mFrameHeight = 0
     private var mFrameWidth = 0
-    private var mPlayCallback: SVGAParser.PlayCallback?=null
+    private var mPlayCallback: SVGAParser.PlayCallback? = null
     private lateinit var mCallback: () -> Unit
 
     constructor(json: JSONObject, cacheDir: File) : this(json, cacheDir, 0, 0)
@@ -231,11 +235,13 @@ class SVGAVideoEntity {
                 val length = it.available().toDouble()
                 val offset = ((startTime / totalTime) * length).toLong()
                 if (SVGASoundManager.isInit()) {
-                    item.soundID = SVGASoundManager.load(soundCallback,
-                            it.fd,
-                            offset,
-                            length.toLong(),
-                            1)
+                    item.soundID = SVGASoundManager.load(
+                        soundCallback,
+                        it.fd,
+                        offset,
+                        length.toLong(),
+                        1
+                    )
                 } else {
                     item.soundID = soundPool?.load(it.fd, offset, length.toLong(), 1)
                 }
@@ -257,10 +263,10 @@ class SVGAVideoEntity {
             audiosDataMap.forEach {
                 val audioCache = SVGACache.buildAudioFile(it.key)
                 audiosFileMap[it.key] =
-                        audioCache.takeIf { file -> file.exists() } ?: generateAudioFile(
-                                audioCache,
-                                it.value
-                        )
+                    audioCache.takeIf { file -> file.exists() } ?: generateAudioFile(
+                        audioCache,
+                        it.value
+                    )
             }
         }
         return audiosFileMap
@@ -277,7 +283,7 @@ class SVGAVideoEntity {
             val fileTag = byteArray.slice(IntRange(0, 3))
             if (fileTag[0].toInt() == 73 && fileTag[1].toInt() == 68 && fileTag[2].toInt() == 51) {
                 audiosDataMap[imageKey] = byteArray
-            }else if(fileTag[0].toInt() == -1 && fileTag[1].toInt() == -5 && fileTag[2].toInt() == -108){
+            } else if (fileTag[0].toInt() == -1 && fileTag[1].toInt() == -5 && fileTag[2].toInt() == -108) {
                 audiosDataMap[imageKey] = byteArray
             }
         }
@@ -316,11 +322,11 @@ class SVGAVideoEntity {
         return try {
             if (Build.VERSION.SDK_INT >= 21) {
                 val attributes = AudioAttributes.Builder()
-                        .setUsage(AudioAttributes.USAGE_MEDIA)
-                        .build()
+                    .setUsage(AudioAttributes.USAGE_MEDIA)
+                    .build()
                 SoundPool.Builder().setAudioAttributes(attributes)
-                        .setMaxStreams(12.coerceAtMost(entity.audios.count()))
-                        .build()
+                    .setMaxStreams(12.coerceAtMost(entity.audios.count()))
+                    .build()
             } else {
                 SoundPool(12.coerceAtMost(entity.audios.count()), AudioManager.STREAM_MUSIC, 0)
             }
@@ -341,7 +347,28 @@ class SVGAVideoEntity {
         soundPool = null
         audioList = emptyList()
         spriteList = emptyList()
+        imageMap.forEach {
+            it.value.recycle()
+        }
         imageMap.clear()
     }
+
+
+    /************* 内存缓存 **************/
+
+    private var memoryCacheKey: MemoryCacheKey? = null
+
+    override fun getCacheKey(): MemoryCacheKey? {
+        return memoryCacheKey
+    }
+
+    override fun setCacheKey(key: MemoryCacheKey) {
+        this.memoryCacheKey = key
+    }
+
+    fun removeDy(){
+
+    }
+
 }
 

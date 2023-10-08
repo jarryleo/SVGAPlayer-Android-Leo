@@ -50,7 +50,7 @@ class SVGAListAssetsActivity : Activity() {
         }
         val svgaParser = shareParser()
         Log.d("lyd", "## name $path")
-        svgaParser.decodeFromAssets(path, config = SVGAConfig(frameWidth = 100, frameHeight = 100), object : ParseCompletion {
+        svgaParser.decodeFromAssets(path, config = SVGAConfig(frameWidth = 0, frameHeight = 0), object : ParseCompletion {
             override fun onComplete(videoItem: SVGAVideoEntity) {
                 Log.e("lyd", "onComplete: ")
                 setVideoItem(videoItem)
