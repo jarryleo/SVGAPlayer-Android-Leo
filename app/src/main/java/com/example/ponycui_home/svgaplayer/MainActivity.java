@@ -52,7 +52,8 @@ public class MainActivity extends AppCompatActivity {
         this.items.add(new SampleItem("Animation From Layout XML", new Intent(this, AnimationFromLayoutActivity.class)));
         this.items.add(new SampleItem("Animation With Dynamic Image", new Intent(this, AnimationWithDynamicImageActivity.class)));
         this.items.add(new SampleItem("Animation With Dynamic Click", new Intent(this, AnimationFromClickActivity.class)));
-        this.items.add(new SampleItem("SVGAList", new Intent(this, SVGAListActivity.class)));
+        this.items.add(new SampleItem("SVGAList(本地资源)", new Intent(this, SVGAListAssetsActivity.class)));
+        this.items.add(new SampleItem("SVGAList(网络资源)", new Intent(this, SVGAListNetworkActivity.class)));
     }
 
     void setupListView() {

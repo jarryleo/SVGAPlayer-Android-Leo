@@ -10,7 +10,7 @@ import com.opensource.svgaplayer.SVGAParser.ParseCompletion
 import com.opensource.svgaplayer.SVGASoundManager
 import com.opensource.svgaplayer.SVGAVideoEntity
 
-class SVGAListActivity : Activity() {
+class SVGAListAssetsActivity : Activity() {
 
     private val list = arrayOfNulls<SVGAImageView>(10)
     private val path = arrayOfNulls<String>(10)
