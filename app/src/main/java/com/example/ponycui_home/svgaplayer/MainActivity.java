@@ -54,7 +54,8 @@ public class MainActivity extends AppCompatActivity {
         this.items.add(new SampleItem("Animation With Dynamic Click", new Intent(this, AnimationFromClickActivity.class)));
         this.items.add(new SampleItem("SVGAList(本地资源)", new Intent(this, SVGAListAssetsActivity.class)));
         this.items.add(new SampleItem("SVGAList(网络资源)", new Intent(this, SVGAListNetworkActivity.class)));
-        this.items.add(new SampleItem("内存缓存", new Intent(this, SVGACacheActivity.class)));
+        this.items.add(new SampleItem("内存缓存(本地资源)", new Intent(this, SVGACacheAssetsActivity.class)));
+        this.items.add(new SampleItem("内存缓存(网络资源)", new Intent(this, SVGACacheNetworkActivity.class)));
     }
 
     void setupListView() {

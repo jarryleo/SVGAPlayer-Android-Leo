@@ -4,7 +4,6 @@ import android.graphics.Canvas
 import android.graphics.ColorFilter
 import android.graphics.PixelFormat
 import android.graphics.drawable.Drawable
-import android.util.Log
 import android.widget.ImageView
 import com.opensource.svgaplayer.cache.SVGAMemoryCache
 import com.opensource.svgaplayer.drawer.SVGACanvasDrawer

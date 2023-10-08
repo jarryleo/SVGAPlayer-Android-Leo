@@ -2,7 +2,6 @@ package com.example.ponycui_home.svgaplayer
 
 import android.app.Activity
 import android.os.Bundle
-import android.util.Log
 import com.opensource.svgaplayer.SVGAConfig
 import com.opensource.svgaplayer.SVGAImageView
 import com.opensource.svgaplayer.SVGAParser.Companion.shareParser
@@ -11,7 +10,7 @@ import com.opensource.svgaplayer.SVGASoundManager
 import com.opensource.svgaplayer.SVGAVideoEntity
 import java.net.URL
 
-class SVGACacheActivity : Activity() {
+class SVGACacheNetworkActivity : Activity() {
 
     private val list = arrayOfNulls<SVGAImageView>(3)
     private val path = arrayOfNulls<String>(10)

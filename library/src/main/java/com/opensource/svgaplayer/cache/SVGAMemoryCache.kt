@@ -1,11 +1,8 @@
 package com.opensource.svgaplayer.cache
 
-import android.util.Log
-import com.opensource.svgaplayer.BuildConfig
 import com.opensource.svgaplayer.SVGAConfig
 import com.opensource.svgaplayer.SVGAVideoEntity
 import java.lang.ref.WeakReference
-import java.net.URL
 
 /**
  * @Description SVGA内存缓存
@@ -13,8 +10,6 @@ import java.net.URL
  * @Time 2023/10/8 10:15
  */
 class SVGAMemoryCache {
-
-    private var limitCount = 3
 
     private val cacheData by lazy {
         LinkedHashMap<String, WeakReference<SVGAVideoEntity>>(limitCount)
@@ -68,7 +63,12 @@ class SVGAMemoryCache {
     }
 
     companion object {
+
         val INSTANCE by lazy { SVGAMemoryCache() }
+
+        /** 内存缓存个数 */
+        var limitCount = 3
+
 
         /**
          * 拼接缓存Key所需要的字段
