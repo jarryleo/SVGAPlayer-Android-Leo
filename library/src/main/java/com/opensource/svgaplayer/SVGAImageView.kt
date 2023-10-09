@@ -20,9 +20,9 @@ import java.net.URL
  * Created by PonyCui on 2017/3/29.
  */
 open class SVGAImageView @JvmOverloads constructor(
-        context: Context,
-        attrs: AttributeSet? = null,
-        defStyleAttr: Int = 0
+    context: Context,
+    attrs: AttributeSet? = null,
+    defStyleAttr: Int = 0
 ) : ImageView(context, attrs, defStyleAttr) {
 
     private val TAG = "SVGAImageView"
@@ -39,9 +39,9 @@ open class SVGAImageView @JvmOverloads constructor(
     var loops = 0
 
     @Deprecated(
-            "It is recommended to use clearAfterDetached, or manually call to SVGAVideoEntity#clear." +
-                    "If you just consider cleaning up the canvas after playing, you can use FillMode#Clear.",
-            level = DeprecationLevel.WARNING
+        "It is recommended to use clearAfterDetached, or manually call to SVGAVideoEntity#clear." +
+                "If you just consider cleaning up the canvas after playing, you can use FillMode#Clear.",
+        level = DeprecationLevel.WARNING
     )
     var clearsAfterStop = false
     var clearsAfterDetached = true
@@ -76,9 +76,11 @@ open class SVGAImageView @JvmOverloads constructor(
                 "0" -> {
                     fillMode = FillMode.Backward
                 }
+
                 "1" -> {
                     fillMode = FillMode.Forward
                 }
+
                 "2" -> {
                     fillMode = FillMode.Clear
                 }
@@ -96,7 +98,7 @@ open class SVGAImageView @JvmOverloads constructor(
         if (source.startsWith("http://") || source.startsWith("https://")) {
             parser.decodeFromURL(URL(source), config = SVGAConfig(), createParseCompletion(refImgView))
         } else {
-            parser.decodeFromAssets(source,config = SVGAConfig(), createParseCompletion(refImgView))
+            parser.decodeFromAssets(source, config = SVGAConfig(), createParseCompletion(refImgView))
         }
     }
 
@@ -169,13 +171,15 @@ open class SVGAImageView @JvmOverloads constructor(
             val getMethod = animatorClass.getDeclaredMethod("getDurationScale") ?: return scale
             scale = (getMethod.invoke(animatorClass) as Float).toDouble()
             if (scale == 0.0) {
-                val setMethod = animatorClass.getDeclaredMethod("setDurationScale",Float::class.java) ?: return scale
+                val setMethod = animatorClass.getDeclaredMethod("setDurationScale", Float::class.java) ?: return scale
                 setMethod.isAccessible = true
-                setMethod.invoke(animatorClass,1.0f)
+                setMethod.invoke(animatorClass, 1.0f)
                 scale = 1.0
-                LogUtils.info(TAG,
-                        "The animation duration scale has been reset to" +
-                                " 1.0x, because you closed it on developer options.")
+                LogUtils.info(
+                    TAG,
+                    "The animation duration scale has been reset to" +
+                            " 1.0x, because you closed it on developer options."
+                )
             }
         } catch (ignore: Exception) {
             ignore.printStackTrace()
@@ -199,9 +203,11 @@ open class SVGAImageView @JvmOverloads constructor(
                 FillMode.Backward -> {
                     drawable.currentFrame = mStartFrame
                 }
+
                 FillMode.Forward -> {
                     drawable.currentFrame = mEndFrame
                 }
+
                 FillMode.Clear -> {
                     drawable.cleared = true
                 }
@@ -244,7 +250,7 @@ open class SVGAImageView @JvmOverloads constructor(
         if (videoItem == null) {
             setImageDrawable(null)
         } else {
-            val drawable = SVGADrawable(videoItem, dynamicItem ?: SVGADynamicEntity())
+            val drawable = SVGADrawable(videoItem, dynamicItem)
             drawable.cleared = true
             setImageDrawable(drawable)
         }
@@ -271,7 +277,7 @@ open class SVGAImageView @JvmOverloads constructor(
         stepToFrame(frame, andPlay)
     }
 
-    fun setOnAnimKeyClickListener(clickListener : SVGAClickAreaListener){
+    fun setOnAnimKeyClickListener(clickListener: SVGAClickAreaListener) {
         mItemClickAreaListener = clickListener
     }
 
@@ -281,14 +287,17 @@ open class SVGAImageView @JvmOverloads constructor(
             return super.onTouchEvent(event)
         }
         val drawable = getSVGADrawable() ?: return super.onTouchEvent(event)
-        for ((key, value) in drawable.dynamicItem.mClickMap) {
-            if (event.x >= value[0] && event.x <= value[2] && event.y >= value[1] && event.y <= value[3]) {
-                mItemClickAreaListener?.let {
-                    it.onClick(key)
-                    return true
+        drawable.dynamicItem?.mClickMap?.apply {
+            for ((key, value) in this) {
+                if (event.x >= value[0] && event.x <= value[2] && event.y >= value[1] && event.y <= value[3]) {
+                    mItemClickAreaListener?.let {
+                        it.onClick(key)
+                        return true
+                    }
                 }
             }
         }
+
 
         return super.onTouchEvent(event)
     }

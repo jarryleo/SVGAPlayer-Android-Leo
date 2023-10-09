@@ -14,7 +14,7 @@ import com.opensource.svgaplayer.entities.SVGAVideoShapeEntity
  * Created by cuiminghui on 2017/3/29.
  */
 
-internal class SVGACanvasDrawer(videoItem: SVGAVideoEntity, val dynamicItem: SVGADynamicEntity) : SGVADrawer(videoItem) {
+internal class SVGACanvasDrawer(videoItem: SVGAVideoEntity, val dynamicItem: SVGADynamicEntity?) : SGVADrawer(videoItem) {
 
     private val sharedValues = ShareValues()
     private val drawTextCache: HashMap<String, Bitmap> = hashMapOf()
@@ -199,12 +199,12 @@ internal class SVGACanvasDrawer(videoItem: SVGAVideoEntity, val dynamicItem: SVG
 
     private fun drawImage(sprite: SVGADrawerSprite, canvas: Canvas) {
         val imageKey = sprite.imageKey ?: return
-        val isHidden = dynamicItem.dynamicHidden[imageKey] == true
+        val isHidden = dynamicItem?.dynamicHidden?.get(imageKey) == true
         if (isHidden) {
             return
         }
         val bitmapKey = if (imageKey.endsWith(".matte")) imageKey.substring(0, imageKey.length - 6) else imageKey
-        val drawingBitmap = (dynamicItem.dynamicImage[bitmapKey] ?: videoItem.imageMap[bitmapKey])
+        val drawingBitmap = (dynamicItem?.dynamicImage?.get(bitmapKey) ?: videoItem.imageMap[bitmapKey])
                 ?: return
         val frameMatrix = shareFrameMatrix(sprite.frameEntity.transform)
         val paint = this.sharedValues.sharedPaint()
@@ -229,8 +229,8 @@ internal class SVGACanvasDrawer(videoItem: SVGAVideoEntity, val dynamicItem: SVG
                 canvas.drawBitmap(drawingBitmap, frameMatrix, paint)
             }
         }
-        dynamicItem.dynamicIClickArea.let {
-            it.get(imageKey)?.let { listener ->
+        dynamicItem?.dynamicIClickArea.let {
+            it?.get(imageKey)?.let { listener ->
                 val matrixArray = floatArrayOf(0f, 0f, 0f, 0f, 0f, 0f, 0f, 0f, 0f)
                 frameMatrix.getValues(matrixArray)
                 listener.onResponseArea(imageKey, matrixArray[2].toInt()
@@ -243,13 +243,13 @@ internal class SVGACanvasDrawer(videoItem: SVGAVideoEntity, val dynamicItem: SVG
     }
 
     private fun drawTextOnBitmap(canvas: Canvas, drawingBitmap: Bitmap, sprite: SVGADrawerSprite, frameMatrix: Matrix) {
-        if (dynamicItem.isTextDirty) {
+        if (dynamicItem?.isTextDirty==true) {
             this.drawTextCache.clear()
             dynamicItem.isTextDirty = false
         }
         val imageKey = sprite.imageKey ?: return
         var textBitmap: Bitmap? = null
-        dynamicItem.dynamicText[imageKey]?.let { drawingText ->
+        dynamicItem?.dynamicText?.get(imageKey)?.let { drawingText ->
             dynamicItem.dynamicTextPaint[imageKey]?.let { drawingTextPaint ->
                 drawTextCache[imageKey]?.let {
                     textBitmap = it
@@ -268,7 +268,7 @@ internal class SVGACanvasDrawer(videoItem: SVGAVideoEntity, val dynamicItem: SVG
             }
         }
 
-        dynamicItem.dynamicBoringLayoutText[imageKey]?.let {
+        dynamicItem?.dynamicBoringLayoutText?.get(imageKey)?.let {
             drawTextCache[imageKey]?.let {
                 textBitmap = it
             } ?: kotlin.run {
@@ -282,7 +282,7 @@ internal class SVGACanvasDrawer(videoItem: SVGAVideoEntity, val dynamicItem: SVG
             }
         }
 
-        dynamicItem.dynamicStaticLayoutText[imageKey]?.let {
+        dynamicItem?.dynamicStaticLayoutText?.get(imageKey)?.let {
             drawTextCache[imageKey]?.let {
                 textBitmap = it
             } ?: kotlin.run {
@@ -457,14 +457,14 @@ internal class SVGACanvasDrawer(videoItem: SVGAVideoEntity, val dynamicItem: SVG
 
     private fun drawDynamic(sprite: SVGADrawerSprite, canvas: Canvas, frameIndex: Int) {
         val imageKey = sprite.imageKey ?: return
-        dynamicItem.dynamicDrawer[imageKey]?.let {
+        dynamicItem?.dynamicDrawer?.get(imageKey)?.let {
             val frameMatrix = shareFrameMatrix(sprite.frameEntity.transform)
             canvas.save()
             canvas.concat(frameMatrix)
             it.invoke(canvas, frameIndex)
             canvas.restore()
         }
-        dynamicItem.dynamicDrawerSized[imageKey]?.let {
+        dynamicItem?.dynamicDrawerSized?.get(imageKey)?.let {
             val frameMatrix = shareFrameMatrix(sprite.frameEntity.transform)
             canvas.save()
             canvas.concat(frameMatrix)

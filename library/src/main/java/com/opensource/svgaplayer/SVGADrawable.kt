@@ -8,9 +8,7 @@ import android.widget.ImageView
 import com.opensource.svgaplayer.cache.SVGAMemoryCache
 import com.opensource.svgaplayer.drawer.SVGACanvasDrawer
 
-class SVGADrawable(val videoItem: SVGAVideoEntity, val dynamicItem: SVGADynamicEntity) : Drawable() {
-
-    constructor(videoItem: SVGAVideoEntity) : this(videoItem, SVGADynamicEntity())
+class SVGADrawable(val videoItem: SVGAVideoEntity, val dynamicItem: SVGADynamicEntity?) : Drawable() {
 
     var cleared = true
         internal set(value) {
