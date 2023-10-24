@@ -6,6 +6,7 @@ import android.os.Handler
 import android.os.Looper
 import com.opensource.svgaplayer.cache.SVGACache
 import com.opensource.svgaplayer.cache.SVGAMemoryCache
+import com.opensource.svgaplayer.download.FileDownloader
 import com.opensource.svgaplayer.proto.MovieEntity
 import com.opensource.svgaplayer.utils.log.LogUtils
 import org.json.JSONObject
@@ -40,68 +41,10 @@ class SVGAParser(context: Context?) {
         fun onPlay(file: List<File>)
     }
 
-    open class FileDownloader {
-
-        var noCache = false
-
-        open fun resume(url: URL, complete: (inputStream: InputStream) -> Unit, failure: (e: Exception) -> Unit): () -> Unit {
-            var cancelled = false
-            val cancelBlock = {
-                cancelled = true
-            }
-            threadPoolExecutor.execute {
-                try {
-                    LogUtils.info(TAG, "================ svga file download start ================")
-                    if (HttpResponseCache.getInstalled() == null && !noCache) {
-                        LogUtils.error(TAG, "SVGAParser can not handle cache before install HttpResponseCache. see https://github.com/yyued/SVGAPlayer-Android#cache")
-                        LogUtils.error(TAG, "在配置 HttpResponseCache 前 SVGAParser 无法缓存. 查看 https://github.com/yyued/SVGAPlayer-Android#cache ")
-                    }
-                    (url.openConnection() as? HttpURLConnection)?.let {
-                        it.connectTimeout = 20 * 1000
-                        it.requestMethod = "GET"
-                        it.setRequestProperty("Connection", "close")
-                        it.connect()
-                        it.inputStream.use { inputStream ->
-                            ByteArrayOutputStream().use { outputStream ->
-                                val buffer = ByteArray(4096)
-                                var count: Int
-                                while (true) {
-                                    if (cancelled) {
-                                        LogUtils.warn(TAG, "================ svga file download canceled ================")
-                                        break
-                                    }
-                                    count = inputStream.read(buffer, 0, 4096)
-                                    if (count == -1) {
-                                        break
-                                    }
-                                    outputStream.write(buffer, 0, count)
-                                }
-                                if (cancelled) {
-                                    LogUtils.warn(TAG, "================ svga file download canceled ================")
-                                    return@execute
-                                }
-                                ByteArrayInputStream(outputStream.toByteArray()).use {
-                                    LogUtils.info(TAG, "================ svga file download complete ================")
-                                    complete(it)
-                                }
-                            }
-                        }
-                    }
-                } catch (e: Exception) {
-                    LogUtils.error(TAG, "================ svga file download fail ================")
-                    LogUtils.error(TAG, "error: ${e.message}")
-                    e.printStackTrace()
-                    failure(e)
-                }
-            }
-            return cancelBlock
-        }
-    }
-
     var fileDownloader = FileDownloader()
 
     companion object {
-        private const val TAG = "SVGAParser"
+        const val TAG = "SVGAParser"
 
         private val threadNum = AtomicInteger(0)
         private var mShareParser = SVGAParser(null)
