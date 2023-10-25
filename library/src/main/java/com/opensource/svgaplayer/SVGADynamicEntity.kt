@@ -34,8 +34,10 @@ class SVGADynamicEntity {
 
     internal var dynamicDrawerSized: HashMap<String, (canvas: Canvas, frameIndex: Int, width: Int, height: Int) -> Boolean> = hashMapOf()
 
-
     internal var isTextDirty = false
+
+    /** 判断是否由SVGA内部自动释放Bitmap（使用Glide时候如果SVGA内部释放掉Bitmap会造成奔溃） */
+    var isAutoRecycleBitmap = false
 
     fun setHidden(value: Boolean, forKey: String) {
         this.dynamicHidden.put(forKey, value)
@@ -140,8 +142,10 @@ class SVGADynamicEntity {
     fun clearDynamicObjects() {
         this.isTextDirty = true
         this.dynamicHidden.clear()
-        this.dynamicImage.forEach {
-            it.value.recycle()
+        if (isAutoRecycleBitmap) {
+            this.dynamicImage.forEach {
+                it.value.recycle()
+            }
         }
         this.dynamicImage.clear()
         this.dynamicText.clear()
