@@ -42,7 +42,7 @@ Then, add dependency to app `build.gradle`.
 compile 'com.github.yyued:SVGAPlayer-Android:latest'
 ```
 
-[![](https://jitpack.io/v/yyued/SVGAPlayer-Android.svg)](https://jitpack.io/#yyued/SVGAPlayer-Android)
+[![](https://jitpack.io/v/yyued/SVGAPlayer-Android.svg)](https://jitpack.io/#LYiDon/SVGAPlayer-Android/1.0.2)
 
 ### Static Parser Support
 Perser#shareParser should be init(context) in Application or other Activity.
