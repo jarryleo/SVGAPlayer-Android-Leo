@@ -10,4 +10,8 @@ class MyApplication : Application() {
         SVGAManager.init(this)
     }
 
+    override fun onLowMemory() {
+        super.onLowMemory()
+        SVGAManager.onLowMemory()
+    }
 }

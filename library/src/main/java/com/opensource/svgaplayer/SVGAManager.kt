@@ -47,4 +47,8 @@ object SVGAManager {
             SVGALogger.injectSVGALoggerImp(logger)
         }
     }
+
+    fun onLowMemory() {
+        SVGAMemoryCache.INSTANCE.clear()
+    }
 }

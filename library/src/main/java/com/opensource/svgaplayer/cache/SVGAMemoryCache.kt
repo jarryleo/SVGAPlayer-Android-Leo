@@ -48,6 +48,10 @@ class SVGAMemoryCache(private val cacheLimit: Int = 3) {
         }
     }
 
+    fun clear() {
+        lruCache.evictAll()
+    }
+
     companion object {
 
         val INSTANCE by lazy { SVGAMemoryCache(limitCount) }
