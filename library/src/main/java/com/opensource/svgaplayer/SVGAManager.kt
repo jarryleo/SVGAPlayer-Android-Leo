@@ -1,6 +1,6 @@
 package com.opensource.svgaplayer
 
-import android.app.Application
+import android.content.Context
 import android.net.http.HttpResponseCache
 import com.opensource.svgaplayer.cache.SVGACache
 import com.opensource.svgaplayer.cache.SVGAMemoryCache
@@ -17,7 +17,7 @@ import java.util.concurrent.ThreadPoolExecutor
 object SVGAManager {
     @JvmStatic
     fun init(
-        context: Application,
+        context: Context,
         memoryCacheCount: Int = 8,
         httpCacheSize: Long = (256 * 1024 * 1024).toLong(),
         logEnabled: Boolean = false,

@@ -1,6 +1,6 @@
 package com.opensource.svgaplayer
 
-import android.app.Application
+import android.content.Context
 import android.os.Handler
 import android.os.Looper
 import com.opensource.svgaplayer.cache.SVGACache
@@ -30,7 +30,7 @@ import kotlin.properties.Delegates
 private var fileLock: Any = Any()
 private var isUnzipping = false
 
-class SVGAParser private constructor(context: Application) {
+class SVGAParser private constructor(context: Context) {
     private var mContext = context.applicationContext
 
     interface ParseCompletion {
@@ -64,7 +64,7 @@ class SVGAParser private constructor(context: Application) {
             return mShareParser
         }
 
-        fun init(context: Application) {
+        fun init(context: Context) {
             mShareParser = SVGAParser(context)
         }
     }
