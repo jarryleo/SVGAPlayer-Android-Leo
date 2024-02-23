@@ -32,7 +32,7 @@ public class AnimationWithDynamicImageActivity extends Activity {
 
     private void loadAnimation() {
         try { // new URL needs try catch.
-            SVGAParser parser = new SVGAParser(this);
+            SVGAParser parser = SVGAParser.shareParser();
             parser.decodeFromURL(new URL("https://github.com/yyued/SVGA-Samples/blob/master/kingset.svga?raw=true"),new SVGAConfig(), new SVGAParser.ParseCompletion() {
                 @Override
                 public void onComplete(@NotNull SVGAVideoEntity videoItem) {

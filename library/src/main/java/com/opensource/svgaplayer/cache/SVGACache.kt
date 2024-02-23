@@ -12,12 +12,11 @@ import java.security.MessageDigest
  */
 object SVGACache {
     enum class Type {
-        DEFAULT,
+        ZIP,
         FILE
     }
 
     private const val TAG = "SVGACache"
-    private var type: Type = Type.DEFAULT
     private var cacheDir: String = "/"
         get() {
             if (field != "/") {
@@ -30,16 +29,10 @@ object SVGACache {
         }
 
 
-    fun onCreate(context: Context?) {
-        onCreate(context, Type.DEFAULT)
-    }
-
-    fun onCreate(context: Context?, type: Type) {
+    fun init(context: Context) {
         if (isInitialized()) return
-        context ?: return
         cacheDir = "${context.cacheDir.absolutePath}/svga/"
         File(cacheDir).takeIf { !it.exists() }?.mkdirs()
-        SVGACache.type = type
     }
 
     /**
@@ -80,16 +73,13 @@ object SVGACache {
         return "/" != cacheDir && File(cacheDir).exists()
     }
 
-    fun isDefaultCache(): Boolean = type == Type.DEFAULT
-
-    fun isCached(cacheKey: String): Boolean {
-        return if (isDefaultCache()) {
-            buildCacheDir(cacheKey)
-        } else {
-            buildSvgaFile(
-                    cacheKey
-            )
-        }.exists()
+    /**
+     * 判断缓存是否存在，存在则返回缓存类型
+     */
+    fun getCachedType(cacheKey: String): Type? {
+        if (buildCacheDir(cacheKey).exists()) return Type.ZIP
+        if (buildSvgaFile(cacheKey).exists()) return Type.FILE
+        return null
     }
 
     fun buildCacheKey(str: String): String {

@@ -6,6 +6,7 @@ import android.os.Bundle;
 import android.support.annotation.Nullable;
 import android.util.Log;
 
+import com.opensource.svgaplayer.SVGAConfig;
 import com.opensource.svgaplayer.SVGAImageView;
 import com.opensource.svgaplayer.SVGAParser;
 import com.opensource.svgaplayer.SVGAVideoEntity;
@@ -30,21 +31,30 @@ public class AnimationFromNetworkActivity extends Activity {
 
     private void loadAnimation() {
         try { // new URL needs try catch.
-            SVGAParser svgaParser = SVGAParser.Companion.shareParser();
-            svgaParser.decodeFromURL(new URL("https://github.com/yyued/SVGA-Samples/blob/master/posche.svga?raw=true"), new SVGAParser.ParseCompletion() {
-                @Override
-                public void onComplete(@NotNull SVGAVideoEntity videoItem) {
-                    Log.d("##","## FromNetworkActivity load onComplete");
-                    animationView.setVideoItem(videoItem);
-                    animationView.startAnimation();
-                }
-                @Override
-                public void onError() {
+            SVGAParser svgaParser = SVGAParser.shareParser();
+            svgaParser.decodeFromURL(
+                    new URL("https://github.com/yyued/SVGA-Samples/blob/master/posche.svga?raw=true"),
+                    new SVGAConfig(
+                            animationView.getWidth(),
+                            animationView.getHeight(),
+                            true
+                    ),
+                    new SVGAParser.ParseCompletion() {
+                        @Override
+                        public void onComplete(@NotNull SVGAVideoEntity videoItem) {
+                            Log.d("##", "## FromNetworkActivity load onComplete");
+                            animationView.setVideoItem(videoItem);
+                            animationView.startAnimation();
+                        }
 
-                }
+                        @Override
+                        public void onError() {
+
+                        }
 
 
-            },null);
+                    },
+                    null);
         } catch (MalformedURLException e) {
             e.printStackTrace();
         }

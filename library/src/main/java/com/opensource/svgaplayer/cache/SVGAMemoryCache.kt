@@ -1,5 +1,7 @@
 package com.opensource.svgaplayer.cache
 
+import android.os.Build
+import android.util.LruCache
 import com.opensource.svgaplayer.SVGAConfig
 import com.opensource.svgaplayer.SVGAVideoEntity
 import java.lang.ref.WeakReference
@@ -9,71 +11,58 @@ import java.lang.ref.WeakReference
  * @Author lyd
  * @Time 2023/10/8 10:15
  */
-class SVGAMemoryCache {
+class SVGAMemoryCache(private val cacheLimit: Int = 3) {
 
-    private val cacheData by lazy {
-        LinkedHashMap<String, WeakReference<SVGAVideoEntity>>(limitCount)
+    private val lruCache by lazy {
+        object : LruCache<String, WeakReference<SVGAVideoEntity>>(cacheLimit) {
+            override fun entryRemoved(
+                evicted: Boolean,
+                key: String?,
+                oldValue: WeakReference<SVGAVideoEntity>?,
+                newValue: WeakReference<SVGAVideoEntity>?
+            ) {
+                if (evicted) {
+                    oldValue?.get()?.clear()
+                    oldValue?.clear()
+                }
+            }
+        }
+
     }
 
     fun getData(key: String): SVGAVideoEntity? {
-        return synchronized(this) {
-            cacheData[key]?.get()
-        }
+        return lruCache.get(key)?.get()
     }
 
     fun putData(key: String, entity: SVGAVideoEntity) {
-        synchronized(this) {
-            cleanEmpty()
-            cacheData[key] = WeakReference(entity)
-            cleanLimit()
-        }
+        lruCache.put(key, WeakReference(entity))
     }
 
     /**
-     * 清除没有被引用的数据
+     * 重新设置缓存大小，只有在Android 5.0及以上才有效
+     * @param limit Int
      */
-    private fun cleanEmpty() {
-        cacheData.firstNull()?.apply {
-            cacheData.remove(this)?.clear()
-            cleanEmpty()
+    fun resizeCache(limit: Int) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+            lruCache.resize(limit)
         }
-    }
-
-    /**
-     * 清除超出限制的数据
-     */
-    private fun cleanLimit() {
-        if (cacheData.size > limitCount) {
-            val key = this.cacheData.entries.iterator().next().key
-            cacheData.remove(key)?.clear()
-            cleanLimit()
-        }
-    }
-
-    /**
-     * 寻找引用已经被回收的数据
-     */
-    private inline fun <K, V> Map<out K, WeakReference<V>>.firstNull(): K? {
-        for (element in this) {
-            if (element.value.get() == null) {
-                return element.key
-            }
-        }
-        return null
     }
 
     companion object {
 
-        val INSTANCE by lazy { SVGAMemoryCache() }
+        val INSTANCE by lazy { SVGAMemoryCache(limitCount) }
 
         /** 内存缓存个数 */
         var limitCount = 3
-
+            set(value) {
+                field = value
+                INSTANCE.resizeCache(value)
+            }
 
         /**
          * 拼接缓存Key所需要的字段
          */
-        fun crateKey(path: String, config: SVGAConfig): String {
+        fun createKey(path: String, config: SVGAConfig): String {
             return "key:{path = $path frameWidth = ${config.frameWidth} frameHeight = ${config.frameHeight}}".let {
                 SVGACache.buildCacheKey(it)
             }

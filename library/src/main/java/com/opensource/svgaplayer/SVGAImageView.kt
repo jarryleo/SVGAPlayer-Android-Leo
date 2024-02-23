@@ -6,7 +6,6 @@ import android.annotation.SuppressLint
 import android.content.Context
 import android.os.Build
 import android.util.AttributeSet
-import android.util.Log
 import android.view.MotionEvent
 import android.view.View
 import android.view.animation.LinearInterpolator
@@ -65,10 +64,12 @@ open class SVGAImageView @JvmOverloads constructor(
     }
 
     private fun loadAttrs(attrs: AttributeSet) {
-        val typedArray = context.theme.obtainStyledAttributes(attrs, R.styleable.SVGAImageView, 0, 0)
+        val typedArray =
+            context.theme.obtainStyledAttributes(attrs, R.styleable.SVGAImageView, 0, 0)
         loops = typedArray.getInt(R.styleable.SVGAImageView_loopCount, 0)
         clearsAfterStop = typedArray.getBoolean(R.styleable.SVGAImageView_clearsAfterStop, false)
-        clearsAfterDetached = typedArray.getBoolean(R.styleable.SVGAImageView_clearsAfterDetached, true)
+        clearsAfterDetached =
+            typedArray.getBoolean(R.styleable.SVGAImageView_clearsAfterDetached, true)
         mAntiAlias = typedArray.getBoolean(R.styleable.SVGAImageView_antiAlias, true)
         mAutoPlay = typedArray.getBoolean(R.styleable.SVGAImageView_autoPlay, true)
         typedArray.getString(R.styleable.SVGAImageView_fillMode)?.let {
@@ -94,11 +95,19 @@ open class SVGAImageView @JvmOverloads constructor(
 
     private fun parserSource(source: String) {
         val refImgView = WeakReference<SVGAImageView>(this)
-        val parser = SVGAParser(context)
+        val parser = SVGAParser.shareParser()
         if (source.startsWith("http://") || source.startsWith("https://")) {
-            parser.decodeFromURL(URL(source), config = SVGAConfig(), createParseCompletion(refImgView))
+            parser.decodeFromURL(
+                URL(source),
+                config = SVGAConfig(),
+                createParseCompletion(refImgView)
+            )
         } else {
-            parser.decodeFromAssets(source, config = SVGAConfig(), createParseCompletion(refImgView))
+            parser.decodeFromAssets(
+                source,
+                config = SVGAConfig(),
+                createParseCompletion(refImgView)
+            )
         }
     }
 
@@ -138,10 +147,14 @@ open class SVGAImageView @JvmOverloads constructor(
         setupDrawable()
         mStartFrame = Math.max(0, range?.location ?: 0)
         val videoItem = drawable.videoItem
-        mEndFrame = Math.min(videoItem.frames - 1, ((range?.location ?: 0) + (range?.length ?: Int.MAX_VALUE) - 1))
+        mEndFrame = Math.min(
+            videoItem.frames - 1,
+            ((range?.location ?: 0) + (range?.length ?: Int.MAX_VALUE) - 1)
+        )
         val animator = ValueAnimator.ofInt(mStartFrame, mEndFrame)
         animator.interpolator = LinearInterpolator()
-        animator.duration = ((mEndFrame - mStartFrame + 1) * (1000 / videoItem.FPS) / generateScale()).toLong()
+        animator.duration =
+            ((mEndFrame - mStartFrame + 1) * (1000 / videoItem.FPS) / generateScale()).toLong()
         animator.repeatCount = if (loops <= 0) 99999 else loops - 1
         animator.addUpdateListener(mAnimatorUpdateListener)
         animator.addListener(mAnimatorListener)
@@ -163,7 +176,6 @@ open class SVGAImageView @JvmOverloads constructor(
         return drawable as? SVGADrawable
     }
 
-    @Suppress("UNNECESSARY_SAFE_CALL")
     private fun generateScale(): Double {
         var scale = 1.0
         try {
@@ -171,7 +183,9 @@ open class SVGAImageView @JvmOverloads constructor(
             val getMethod = animatorClass.getDeclaredMethod("getDurationScale") ?: return scale
             scale = (getMethod.invoke(animatorClass) as Float).toDouble()
             if (scale == 0.0) {
-                val setMethod = animatorClass.getDeclaredMethod("setDurationScale", Float::class.java) ?: return scale
+                val setMethod =
+                    animatorClass.getDeclaredMethod("setDurationScale", Float::class.java)
+                        ?: return scale
                 setMethod.isAccessible = true
                 setMethod.invoke(animatorClass, 1.0f)
                 scale = 1.0
@@ -190,7 +204,8 @@ open class SVGAImageView @JvmOverloads constructor(
     private fun onAnimatorUpdate(animator: ValueAnimator?) {
         val drawable = getSVGADrawable() ?: return
         drawable.currentFrame = animator?.animatedValue as Int
-        val percentage = (drawable.currentFrame + 1).toDouble() / drawable.videoItem.frames.toDouble()
+        val percentage =
+            (drawable.currentFrame + 1).toDouble() / drawable.videoItem.frames.toDouble()
         callback?.onStep(drawable.currentFrame, percentage)
     }
 
@@ -263,7 +278,10 @@ open class SVGAImageView @JvmOverloads constructor(
         if (andPlay) {
             startAnimation()
             mAnimator?.let {
-                it.currentPlayTime = (Math.max(0.0f, Math.min(1.0f, (frame.toFloat() / drawable.videoItem.frames.toFloat()))) * it.duration).toLong()
+                it.currentPlayTime = (Math.max(
+                    0.0f,
+                    Math.min(1.0f, (frame.toFloat() / drawable.videoItem.frames.toFloat()))
+                ) * it.duration).toLong()
             }
         }
     }
@@ -331,7 +349,8 @@ open class SVGAImageView @JvmOverloads constructor(
     } // end of AnimatorListener
 
 
-    private class AnimatorUpdateListener(view: SVGAImageView) : ValueAnimator.AnimatorUpdateListener {
+    private class AnimatorUpdateListener(view: SVGAImageView) :
+        ValueAnimator.AnimatorUpdateListener {
         private val weakReference = WeakReference<SVGAImageView>(view)
 
         override fun onAnimationUpdate(animation: ValueAnimator?) {

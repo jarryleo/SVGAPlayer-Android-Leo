@@ -1,7 +1,6 @@
 package com.opensource.svgaplayer
 
-import android.content.Context
-import android.net.http.HttpResponseCache
+import android.app.Application
 import android.os.Handler
 import android.os.Looper
 import com.opensource.svgaplayer.cache.SVGACache
@@ -10,27 +9,29 @@ import com.opensource.svgaplayer.download.FileDownloader
 import com.opensource.svgaplayer.proto.MovieEntity
 import com.opensource.svgaplayer.utils.log.LogUtils
 import org.json.JSONObject
-import java.io.*
-import java.net.HttpURLConnection
+import java.io.BufferedInputStream
+import java.io.ByteArrayOutputStream
+import java.io.File
+import java.io.FileInputStream
+import java.io.FileOutputStream
+import java.io.IOException
+import java.io.InputStream
 import java.net.URL
 import java.util.concurrent.Executors
 import java.util.concurrent.ThreadPoolExecutor
 import java.util.concurrent.atomic.AtomicInteger
-import java.util.zip.Inflater
+import java.util.zip.InflaterInputStream
 import java.util.zip.ZipInputStream
+import kotlin.properties.Delegates
 
 /**
  * Created by PonyCui 16/6/18.
  */
-private var fileLock: Int = 0
+private var fileLock: Any = Any()
 private var isUnzipping = false
 
-class SVGAParser(context: Context?) {
-    private var mContext = context?.applicationContext
-
-    init {
-        SVGACache.onCreate(context)
-    }
+class SVGAParser private constructor(context: Application) {
+    private var mContext = context.applicationContext
 
     interface ParseCompletion {
         fun onComplete(videoItem: SVGAVideoEntity)
@@ -41,30 +42,31 @@ class SVGAParser(context: Context?) {
         fun onPlay(file: List<File>)
     }
 
-    var fileDownloader = FileDownloader()
+    private var fileDownloader = FileDownloader()
 
     companion object {
         const val TAG = "SVGAParser"
 
         private val threadNum = AtomicInteger(0)
-        private var mShareParser = SVGAParser(null)
+        private var mShareParser by Delegates.notNull<SVGAParser>()
 
         internal var threadPoolExecutor = Executors.newCachedThreadPool { r ->
             Thread(r, "SVGAParser-Thread-${threadNum.getAndIncrement()}")
         }
 
+        @JvmStatic
         fun setThreadPoolExecutor(executor: ThreadPoolExecutor) {
             threadPoolExecutor = executor
         }
 
+        @JvmStatic
         fun shareParser(): SVGAParser {
             return mShareParser
         }
-    }
 
-    fun init(context: Context) {
-        mContext = context.applicationContext
-        SVGACache.onCreate(mContext)
+        fun init(context: Application) {
+            mShareParser = SVGAParser(context)
+        }
     }
 
     fun decodeFromAssets(
@@ -87,7 +89,8 @@ class SVGAParser(context: Context?) {
         }
         LogUtils.info(TAG, "================ decode $name from assets ================")
         //加载内存缓存数据
-        val memoryCacheKey: String? = if (config.isCacheToMemory) SVGAMemoryCache.crateKey(name, config) else null
+        val memoryCacheKey: String? =
+            if (config.isCacheToMemory) SVGAMemoryCache.createKey(name, config) else null
         if (decodeFromMemoryCacheKey(memoryCacheKey, config, callback, playCallback, name)) {
             return
         }
@@ -134,18 +137,33 @@ class SVGAParser(context: Context?) {
         val urlPath = url.toString()
         LogUtils.info(TAG, "================ decode from url: $urlPath ================")
         //加载内存缓存数据
-        val memoryCacheKey: String? = if (config.isCacheToMemory) SVGAMemoryCache.crateKey(urlPath, config) else null
+        val memoryCacheKey: String? =
+            if (config.isCacheToMemory) SVGAMemoryCache.createKey(urlPath, config) else null
         if (decodeFromMemoryCacheKey(memoryCacheKey, config, callback, playCallback, urlPath)) {
             return null
         }
-        val cacheKey = SVGACache.buildCacheKey(url);
-        return if (SVGACache.isCached(cacheKey)) { //加载本地缓存数据
+        val cacheKey = SVGACache.buildCacheKey(url)
+        val cachedType = SVGACache.getCachedType(cacheKey)
+        return if (cachedType != null) { //加载本地缓存数据
             LogUtils.info(TAG, "this url cached")
             threadPoolExecutor.execute {
-                if (SVGACache.isDefaultCache()) {
-                    this.decodeFromCacheKey(cacheKey, config, callback, memoryCacheKey, alias = urlPath)
+                if (cachedType == SVGACache.Type.ZIP) {
+                    this.decodeFromUnzipDirCacheKey(
+                        cacheKey,
+                        config,
+                        callback,
+                        memoryCacheKey,
+                        alias = urlPath
+                    )
                 } else {
-                    this.decodeFromSVGAFileCacheKey(cacheKey, config, callback, playCallback, memoryCacheKey, alias = urlPath)
+                    this.decodeFromSVGAFileCacheKey(
+                        cacheKey,
+                        config,
+                        callback,
+                        playCallback,
+                        memoryCacheKey,
+                        alias = urlPath
+                    )
                 }
             }
             return null
@@ -163,10 +181,6 @@ class SVGAParser(context: Context?) {
                     alias = urlPath
                 )
             }, {
-                LogUtils.error(
-                    TAG,
-                    "================ svga file: $url download fail ================"
-                )
                 this.invokeErrorCallback(it, callback, alias = urlPath)
             })
         }
@@ -185,44 +199,51 @@ class SVGAParser(context: Context?) {
     ) {
         threadPoolExecutor.execute {
             try {
-                LogUtils.info(TAG, "================ decode $alias from svga cachel file to entity ================")
-                FileInputStream(SVGACache.buildSvgaFile(cacheKey)).use { inputStream ->
-                    readAsBytes(inputStream)?.let { bytes ->
-                        if (isZipFile(bytes)) {
-                            this.decodeFromCacheKey(cacheKey, config, callback, memoryCacheKey, alias)
-                        } else {
-                            LogUtils.info(TAG, "inflate start")
-                            inflate(bytes)?.let {
-                                LogUtils.info(TAG, "inflate complete")
-                                val videoItem = SVGAVideoEntity(
-                                    MovieEntity.ADAPTER.decode(it),
-                                    File(cacheKey),
-                                    config.frameWidth,
-                                    config.frameHeight,
-                                    memoryCacheKey
-                                )
-                                LogUtils.info(TAG, "SVGAVideoEntity prepare start")
-                                videoItem.prepare({
-                                    LogUtils.info(TAG, "SVGAVideoEntity prepare success")
-                                    this.invokeCompleteCallback(videoItem, callback, alias)
-                                }, playCallback)
-
-                            } ?: this.invokeErrorCallback(
-                                Exception("inflate(bytes) cause exception"),
-                                callback,
-                                alias
-                            )
-                        }
-                    } ?: this.invokeErrorCallback(
-                        Exception("readAsBytes(inputStream) cause exception"),
-                        callback,
-                        alias
-                    )
+                LogUtils.info(
+                    TAG,
+                    "================ decode $alias from svga cachel file to entity ================"
+                )
+                val svgaFile = SVGACache.buildSvgaFile(cacheKey)
+                FileInputStream(svgaFile).use { inputStream ->
+                    //检查是否是zip文件
+                    val magicCode = ByteArray(4)
+                    if (inputStream.markSupported()) {
+                        inputStream.mark(4)
+                        inputStream.read(magicCode)
+                        inputStream.reset()
+                    }
+                    if (isZipFile(magicCode)) {
+                        this.decodeFromUnzipDirCacheKey(
+                            cacheKey,
+                            config,
+                            callback,
+                            memoryCacheKey,
+                            alias
+                        )
+                    } else {
+                        LogUtils.info(TAG, "inflate start")
+                        LogUtils.info(TAG, "inflate complete")
+                        val videoItem = SVGAVideoEntity(
+                            MovieEntity.ADAPTER.decode(InflaterInputStream(inputStream)),
+                            File(cacheKey),
+                            config.frameWidth,
+                            config.frameHeight,
+                            memoryCacheKey
+                        )
+                        LogUtils.info(TAG, "SVGAVideoEntity prepare start")
+                        videoItem.prepare({
+                            LogUtils.info(TAG, "SVGAVideoEntity prepare success")
+                            this.invokeCompleteCallback(videoItem, callback, alias)
+                        }, playCallback)
+                    }
                 }
             } catch (e: java.lang.Exception) {
                 this.invokeErrorCallback(e, callback, alias)
             } finally {
-                LogUtils.info(TAG, "================ decode $alias from svga cachel file to entity end ================")
+                LogUtils.info(
+                    TAG,
+                    "================ decode $alias from svga cachel file to entity end ================"
+                )
             }
         }
     }
@@ -244,72 +265,57 @@ class SVGAParser(context: Context?) {
         LogUtils.info(TAG, "================ decode $alias from input stream ================")
         threadPoolExecutor.execute {
             try {
-                readAsBytes(inputStream)?.let { bytes ->
-                    if (isZipFile(bytes)) {
-                        LogUtils.info(TAG, "decode from zip file")
-                        if (!SVGACache.buildCacheDir(cacheKey).exists() || isUnzipping) {
-                            synchronized(fileLock) {
-                                if (!SVGACache.buildCacheDir(cacheKey).exists()) {
-                                    isUnzipping = true
-                                    LogUtils.info(TAG, "no cached, prepare to unzip")
-                                    ByteArrayInputStream(bytes).use {
-                                        unzip(it, cacheKey)
-                                        isUnzipping = false
-                                        LogUtils.info(TAG, "unzip success")
-                                    }
-                                }
+                //检查是否是zip文件
+                val magicCode = ByteArray(4)
+                if (inputStream.markSupported()) {
+                    inputStream.mark(4)
+                    inputStream.read(magicCode)
+                    inputStream.reset()
+                }
+                if (isZipFile(magicCode)) {
+                    LogUtils.info(TAG, "decode from zip file")
+                    if (!SVGACache.buildCacheDir(cacheKey).exists() || isUnzipping) {
+                        synchronized(fileLock) {
+                            if (!SVGACache.buildCacheDir(cacheKey).exists()) {
+                                isUnzipping = true
+                                LogUtils.info(TAG, "no cached, prepare to unzip")
+                                unzip(inputStream, cacheKey)
+                                isUnzipping = false
+                                LogUtils.info(TAG, "unzip success")
                             }
                         }
-                        this.decodeFromCacheKey(cacheKey, config, callback, memoryCacheKey, alias)
-                    } else {
-                        if (!SVGACache.isDefaultCache()) {
-                            // 如果 SVGACache 设置类型为 FILE
-                            threadPoolExecutor.execute {
-                                SVGACache.buildSvgaFile(cacheKey).let { cacheFile ->
-                                    try {
-                                        cacheFile.takeIf { !it.exists() }?.createNewFile()
-                                        FileOutputStream(cacheFile).write(bytes)
-                                    } catch (e: Exception) {
-                                        LogUtils.error(TAG, "create cache file fail.", e)
-                                        cacheFile.delete()
-                                    }
-                                }
-                            }
-                        }
-                        LogUtils.info(TAG, "inflate start")
-                        inflate(bytes)?.let {
-                            LogUtils.info(TAG, "inflate complete")
-                            val videoItem = SVGAVideoEntity(
-                                MovieEntity.ADAPTER.decode(it),
-                                File(cacheKey),
-                                config.frameWidth,
-                                config.frameHeight,
-                                memoryCacheKey
-                            )
-                            LogUtils.info(TAG, "SVGAVideoEntity prepare start")
-                            videoItem.prepare({
-                                LogUtils.info(TAG, "SVGAVideoEntity prepare success")
-                                this.invokeCompleteCallback(videoItem, callback, alias)
-                            }, playCallback)
-
-                        } ?: this.invokeErrorCallback(
-                            Exception("inflate(bytes) cause exception"),
-                            callback,
-                            alias
-                        )
                     }
-                } ?: this.invokeErrorCallback(
-                    Exception("readAsBytes(inputStream) cause exception"),
-                    callback,
-                    alias
-                )
+                    this.decodeFromUnzipDirCacheKey(
+                        cacheKey,
+                        config,
+                        callback,
+                        memoryCacheKey,
+                        alias
+                    )
+                } else {
+                    val videoItem = SVGAVideoEntity(
+                        MovieEntity.ADAPTER.decode(InflaterInputStream(inputStream)),
+                        File(cacheKey),
+                        config.frameWidth,
+                        config.frameHeight,
+                        memoryCacheKey
+                    )
+                    LogUtils.info(TAG, "SVGAVideoEntity prepare start")
+                    videoItem.prepare({
+                        LogUtils.info(TAG, "SVGAVideoEntity prepare success")
+                        this.invokeCompleteCallback(videoItem, callback, alias)
+                    }, playCallback)
+                }
             } catch (e: java.lang.Exception) {
                 this.invokeErrorCallback(e, callback, alias)
             } finally {
                 if (closeInputStream) {
                     inputStream.close()
                 }
-                LogUtils.info(TAG, "================ decode $alias from input stream end ================")
+                LogUtils.info(
+                    TAG,
+                    "================ decode $alias from input stream end ================"
+                )
             }
         }
     }
@@ -317,7 +323,10 @@ class SVGAParser(context: Context?) {
     /**
      * @deprecated from 2.4.0
      */
-    @Deprecated("This method has been deprecated from 2.4.0.", ReplaceWith("this.decodeFromAssets(assetsName, callback)"))
+    @Deprecated(
+        "This method has been deprecated from 2.4.0.",
+        ReplaceWith("this.decodeFromAssets(assetsName, callback)")
+    )
     fun parse(assetsName: String, config: SVGAConfig, callback: ParseCompletion?) {
         this.decodeFromAssets(assetsName, config, callback, null)
     }
@@ -325,24 +334,12 @@ class SVGAParser(context: Context?) {
     /**
      * @deprecated from 2.4.0
      */
-    @Deprecated("This method has been deprecated from 2.4.0.", ReplaceWith("this.decodeFromURL(url, callback)"))
+    @Deprecated(
+        "This method has been deprecated from 2.4.0.",
+        ReplaceWith("this.decodeFromURL(url, callback)")
+    )
     fun parse(url: URL, config: SVGAConfig, callback: ParseCompletion?) {
         this.decodeFromURL(url, config, callback, null)
-    }
-
-    /**
-     * @deprecated from 2.4.0
-     */
-    @Deprecated("This method has been deprecated from 2.4.0.", ReplaceWith("this.decodeFromInputStream(inputStream, cacheKey, callback, closeInputStream)"))
-    fun parse(
-        inputStream: InputStream,
-        cacheKey: String,
-        config: SVGAConfig,
-        callback: ParseCompletion?,
-        closeInputStream: Boolean = false,
-        memoryCacheKey: String?
-    ) {
-        this.decodeFromInputStream(inputStream, cacheKey, config, callback, closeInputStream, null, memoryCacheKey)
     }
 
     private fun invokeCompleteCallback(
@@ -369,7 +366,10 @@ class SVGAParser(context: Context?) {
         }
     }
 
-    private fun decodeFromCacheKey(
+    /**
+     * 从解压缓存中加载
+     */
+    private fun decodeFromUnzipDirCacheKey(
         cacheKey: String,
         config: SVGAConfig,
         callback: ParseCompletion?,
@@ -476,42 +476,13 @@ class SVGAParser(context: Context?) {
         }
     }
 
-    private fun readAsBytes(inputStream: InputStream): ByteArray? {
-        ByteArrayOutputStream().use { byteArrayOutputStream ->
-            val byteArray = ByteArray(2048)
-            while (true) {
-                val count = inputStream.read(byteArray, 0, 2048)
-                if (count <= 0) {
-                    break
-                } else {
-                    byteArrayOutputStream.write(byteArray, 0, count)
-                }
-            }
-            return byteArrayOutputStream.toByteArray()
-        }
-    }
-
-    private fun inflate(byteArray: ByteArray): ByteArray? {
-        val inflater = Inflater()
-        inflater.setInput(byteArray, 0, byteArray.size)
-        val inflatedBytes = ByteArray(2048)
-        ByteArrayOutputStream().use { inflatedOutputStream ->
-            while (true) {
-                val count = inflater.inflate(inflatedBytes, 0, 2048)
-                if (count <= 0) {
-                    break
-                } else {
-                    inflatedOutputStream.write(inflatedBytes, 0, count)
-                }
-            }
-            inflater.end()
-            return inflatedOutputStream.toByteArray()
-        }
-    }
-
     // 是否是 zip 文件
     private fun isZipFile(bytes: ByteArray): Boolean {
-        return bytes.size > 4 && bytes[0].toInt() == 80 && bytes[1].toInt() == 75 && bytes[2].toInt() == 3 && bytes[3].toInt() == 4
+        return bytes.size >= 4
+                && bytes[0].toInt() == 80
+                && bytes[1].toInt() == 75
+                && bytes[2].toInt() == 3
+                && bytes[3].toInt() == 4
     }
 
     // 解压
@@ -547,6 +518,11 @@ class SVGAParser(context: Context?) {
                         zipInputStream.closeEntry()
                     }
                 }
+            }
+            //解压完成，删除下载缓存
+            val downloadCacheFile = SVGACache.buildSvgaFile(cacheKey)
+            if (downloadCacheFile.exists()) {
+                downloadCacheFile.delete()
             }
         } catch (e: Exception) {
             LogUtils.error(TAG, "================ unzip error ================")

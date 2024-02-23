@@ -137,7 +137,7 @@ public class MainActivity extends AppCompatActivity {
     }
 
     void setupSVGAParser() {
-        SVGAParser.Companion.shareParser().init(this);
+        //SVGAParser.shareParser().init(this);
     }
 
     private void setupLogger() {
