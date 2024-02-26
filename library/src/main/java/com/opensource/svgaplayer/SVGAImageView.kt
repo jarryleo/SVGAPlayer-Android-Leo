@@ -4,6 +4,7 @@ import android.animation.Animator
 import android.animation.ValueAnimator
 import android.annotation.SuppressLint
 import android.content.Context
+import android.graphics.Rect
 import android.os.Build
 import android.util.AttributeSet
 import android.view.MotionEvent
@@ -145,10 +146,9 @@ open class SVGAImageView @JvmOverloads constructor(
         LogUtils.info(TAG, "================ start animation ================")
         val drawable = getSVGADrawable() ?: return
         setupDrawable()
-        mStartFrame = Math.max(0, range?.location ?: 0)
+        mStartFrame = 0.coerceAtLeast(range?.location ?: 0)
         val videoItem = drawable.videoItem
-        mEndFrame = Math.min(
-            videoItem.frames - 1,
+        mEndFrame = (videoItem.frames - 1).coerceAtMost(
             ((range?.location ?: 0) + (range?.length ?: Int.MAX_VALUE) - 1)
         )
         val animator = ValueAnimator.ofInt(mStartFrame, mEndFrame)
@@ -240,9 +240,22 @@ open class SVGAImageView @JvmOverloads constructor(
         setImageDrawable(null)
     }
 
+    private fun isVisible(): Boolean {
+        val visibleRect = Rect()
+        getGlobalVisibleRect(visibleRect)
+        return visibleRect.width() > 0 && visibleRect.height() > 0
+    }
+
     fun pauseAnimation() {
-        stopAnimation(false)
+        mAnimator?.pause()
+        getSVGADrawable()?.pause()
         callback?.onPause()
+    }
+
+    fun resumeAnimation() {
+        mAnimator?.resume()
+        getSVGADrawable()?.resume()
+        callback?.onResume()
     }
 
     fun stopAnimation() {
@@ -272,15 +285,14 @@ open class SVGAImageView @JvmOverloads constructor(
     }
 
     fun stepToFrame(frame: Int, andPlay: Boolean) {
-        pauseAnimation()
+        stopAnimation(false)
         val drawable = getSVGADrawable() ?: return
         drawable.currentFrame = frame
         if (andPlay) {
             startAnimation()
             mAnimator?.let {
-                it.currentPlayTime = (Math.max(
-                    0.0f,
-                    Math.min(1.0f, (frame.toFloat() / drawable.videoItem.frames.toFloat()))
+                it.currentPlayTime = (0.0f.coerceAtLeast(
+                    1.0f.coerceAtMost((frame.toFloat() / drawable.videoItem.frames.toFloat()))
                 ) * it.duration).toLong()
             }
         }
