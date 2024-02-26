@@ -28,12 +28,14 @@ public class AnimationFromNetworkActivity extends Activity {
         setContentView(animationView);
         loadAnimation();
     }
-
+//https://github.com/jarryleo/SVGAPlayer-Android-Leo/raw/master/app/src/main/assets/big2.svga
     private void loadAnimation() {
         try { // new URL needs try catch.
             SVGAParser svgaParser = SVGAParser.shareParser();
+            String url = "https://github.com/yyued/SVGA-Samples/blob/master/posche.svga?raw=true";
+            String testBigUrl = "https://github.com/jarryleo/SVGAPlayer-Android-Leo/raw/master/app/src/main/assets/big2.svga";
             svgaParser.decodeFromURL(
-                    new URL("https://github.com/yyued/SVGA-Samples/blob/master/posche.svga?raw=true"),
+                    new URL(testBigUrl),
                     new SVGAConfig(
                             animationView.getWidth(),
                             animationView.getHeight(),
