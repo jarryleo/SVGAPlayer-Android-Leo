@@ -46,6 +46,7 @@ object SVGAManager {
         loggerProxy?.let { logger ->
             SVGALogger.injectSVGALoggerImp(logger)
         }
+        SVGASoundManager.init()
     }
 
     fun onLowMemory() {

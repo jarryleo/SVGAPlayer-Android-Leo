@@ -121,7 +121,7 @@ object SVGASoundManager {
     private fun checkInit(): Boolean {
         val isInit = isInit()
         if (!isInit) {
-            LogUtils.error(TAG, "soundPool is null, you need call init() !!!")
+            LogUtils.error(TAG, "soundPool is null, you need call init() ?!")
         }
         return isInit
     }
@@ -144,7 +144,7 @@ object SVGASoundManager {
                       priority: Int): Int {
         if (!checkInit()) return -1
 
-        val soundId = soundPool!!.load(fd, offset, length, priority)
+        val soundId = soundPool?.load(fd, offset, length, priority) ?: return -1
 
         LogUtils.debug(TAG, "load soundId=$soundId callBack=$callBack")
 
@@ -159,7 +159,7 @@ object SVGASoundManager {
 
         LogUtils.debug(TAG, "unload soundId=$soundId")
 
-        soundPool!!.unload(soundId)
+        soundPool?.unload(soundId)
 
         soundCallBackMap.remove(soundId)
     }
@@ -168,27 +168,27 @@ object SVGASoundManager {
         if (!checkInit()) return -1
 
         LogUtils.debug(TAG, "play soundId=$soundId")
-        return soundPool!!.play(soundId, volume, volume, 1, 0, 1.0f)
+        return soundPool?.play(soundId, volume, volume, 1, 0, 1.0f) ?: -1
     }
 
     internal fun stop(soundId: Int) {
         if (!checkInit()) return
 
         LogUtils.debug(TAG, "stop soundId=$soundId")
-        soundPool!!.stop(soundId)
+        soundPool?.stop(soundId)
     }
 
     internal fun resume(soundId: Int) {
         if (!checkInit()) return
 
         LogUtils.debug(TAG, "stop soundId=$soundId")
-        soundPool!!.resume(soundId)
+        soundPool?.resume(soundId)
     }
 
     internal fun pause(soundId: Int) {
         if (!checkInit()) return
 
         LogUtils.debug(TAG, "pause soundId=$soundId")
-        soundPool!!.pause(soundId)
+        soundPool?.pause(soundId)
     }
 }
