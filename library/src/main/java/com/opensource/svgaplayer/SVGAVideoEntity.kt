@@ -19,8 +19,6 @@ import org.json.JSONObject
 import java.io.File
 import java.io.FileInputStream
 import java.io.FileOutputStream
-import java.util.*
-import kotlin.collections.ArrayList
 
 /**
  * Created by PonyCui on 16/6/18.
@@ -167,6 +165,7 @@ class SVGAVideoEntity {
             }
             val filePath = generateBitmapFilePath(entry.value.utf8(), entry.key)
             createBitmap(byteArray, filePath)?.let { bitmap ->
+                LogUtils.info(TAG, "createBitmap key = ${entry.key}")
                 imageMap[entry.key] = bitmap
             }
         }

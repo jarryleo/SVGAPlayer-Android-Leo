@@ -104,5 +104,7 @@ class SVGADrawable(val videoItem: SVGAVideoEntity, val dynamicItem: SVGADynamicE
         videoItem.getMemoryCacheKey()?.apply {
             SVGAMemoryCache.INSTANCE.putData(this, videoItem)
         } ?: videoItem.clear()
+        //清除绘制缓存
+        drawer.clear()
     }
 }

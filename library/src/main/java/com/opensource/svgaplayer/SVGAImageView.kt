@@ -28,9 +28,9 @@ open class SVGAImageView @JvmOverloads constructor(
     private val TAG = "SVGAImageView"
 
     enum class FillMode {
-        Backward,
-        Forward,
-        Clear,
+        Backward, //动画结束后显示最后一帧
+        Forward, //动画结束后显示第一帧
+        Clear, //动画结束后清空画布,并释放内存
     }
 
     var isAnimating = false
@@ -268,6 +268,9 @@ open class SVGAImageView @JvmOverloads constructor(
         mAnimator?.removeAllUpdateListeners()
         getSVGADrawable()?.stop()
         getSVGADrawable()?.cleared = clear
+        if (clear) {
+            getSVGADrawable()?.clear()
+        }
     }
 
     fun setVideoItem(videoItem: SVGAVideoEntity?) {
