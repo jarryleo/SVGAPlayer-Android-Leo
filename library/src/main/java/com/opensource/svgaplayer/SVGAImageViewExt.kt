@@ -9,6 +9,7 @@ import java.net.URL
  * Description : SVGAParser扩展
  */
 
+@JvmOverloads
 fun SVGAImageView.loadUrl(
     url: String,
     useMemoryCache: Boolean = false,
@@ -45,6 +46,7 @@ fun SVGAImageView.loadUrl(
     }
 }
 
+@JvmOverloads
 fun SVGAImageView.loadAssets(
     name: String,
     useMemoryCache: Boolean = false,
