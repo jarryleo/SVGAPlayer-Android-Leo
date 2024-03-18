@@ -15,7 +15,8 @@ fun SVGAImageView.loadUrl(
     useMemoryCache: Boolean = false,
     isOriginal: Boolean = false,
     loopCount: Int = 0,
-    callback: SVGAParser.ParseCompletion? = SVGAPlayCallback(this, loopCount),
+    dynamicCallback: SVGADynamicCallback = { null },
+    callback: SVGAParser.ParseCompletion? = SVGAPlayCallback(this, loopCount, dynamicCallback),
 ) {
     if (url.isEmpty()) {
         return
@@ -52,7 +53,8 @@ fun SVGAImageView.loadAssets(
     useMemoryCache: Boolean = false,
     isOriginal: Boolean = false,
     loopCount: Int = 0,
-    callback: SVGAParser.ParseCompletion? = SVGAPlayCallback(this, loopCount),
+    dynamicCallback: SVGADynamicCallback = { null },
+    callback: SVGAParser.ParseCompletion? = SVGAPlayCallback(this, loopCount, dynamicCallback),
 ) {
     if (name.isEmpty()) {
         return
