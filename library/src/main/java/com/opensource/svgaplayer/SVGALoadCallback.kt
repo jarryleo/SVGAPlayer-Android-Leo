@@ -17,15 +17,16 @@ open class SVGASimpleCallback : SVGAParser.ParseCompletion {
 open class SVGAPlayCallback(
     view: SVGAImageView?,
     private val loopCount: Int = 0,
-    private val dynamicCallback: SVGADynamicCallback? = null
+    dynamicCallback: SVGADynamicCallback? = null
 ) : SVGAParser.ParseCompletion {
 
     private val view = WeakReference(view)
+    private val dynamicCallback = WeakReference(dynamicCallback)
     override fun onComplete(videoItem: SVGAVideoEntity) {
         view.get()?.takeIf { it.isAttachedToWindow }?.apply {
             clearsAfterDetached = true
             loops = loopCount
-            setVideoItem(videoItem, dynamicCallback?.invoke(videoItem))
+            setVideoItem(videoItem, dynamicCallback.get()?.invoke(videoItem))
             startAnimation()
         }
     }
