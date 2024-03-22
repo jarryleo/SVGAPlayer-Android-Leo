@@ -335,6 +335,11 @@ open class SVGAImageView @JvmOverloads constructor(
         return super.onTouchEvent(event)
     }
 
+    override fun onAttachedToWindow() {
+        super.onAttachedToWindow()
+        stepToFrame(0, loops == 0 && !clearsAfterDetached)
+    }
+
     override fun onDetachedFromWindow() {
         super.onDetachedFromWindow()
         stopAnimation(clearsAfterDetached)
