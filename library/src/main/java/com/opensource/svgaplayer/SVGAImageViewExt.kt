@@ -32,12 +32,12 @@ fun SVGAImageView.loadUrl(
         LogUtils.error("SVGAImageView.loadUrl", e)
         return
     }
-    post {
+    getViewSize { width, height ->
         svgaParser.decodeFromURL(
             urlSafe,
             config = SVGAConfig(
-                frameWidth = if (isOriginal) 0 else measuredWidth,
-                frameHeight = if (isOriginal) 0 else measuredHeight,
+                frameWidth = if (isOriginal) 0 else width,
+                frameHeight = if (isOriginal) 0 else height,
                 isCacheToMemory = useMemoryCache
             ),
             callback,
@@ -63,19 +63,62 @@ fun SVGAImageView.loadAssets(
         return
     }
 
-    post {
+    getViewSize { width, height ->
         val svgaParser = SVGAParser.shareParser()
         svgaParser.decodeFromAssets(
             name,
             config = SVGAConfig(
-                frameWidth = if (isOriginal) 0 else measuredWidth,
-                frameHeight = if (isOriginal) 0 else measuredHeight,
+                frameWidth = if (isOriginal) 0 else width,
+                frameHeight = if (isOriginal) 0 else height,
                 isCacheToMemory = useMemoryCache
             ), callback,
             null
         )
         setTag(R.id.svga_load_tag, name)
     }
+}
+
+private fun SVGAImageView.getViewSize(callback: (Int, Int) -> Unit) {
+    var width = getTargetWidth()
+    var height = getTargetHeight()
+    if (width > 0 && height > 0) {
+        callback.invoke(width, height)
+        return
+    }
+    post {
+        width = getTargetWidth()
+        height = getTargetHeight()
+        if (width > 0 && height > 0) {
+            callback.invoke(width, height)
+        } else {
+            callback.invoke(0, 0)
+        }
+    }
+}
+
+private fun SVGAImageView.getTargetHeight(): Int {
+    val verticalPadding = paddingTop + paddingBottom
+    val layoutParamSize = layoutParams?.height ?: 0
+    return getTargetDimen(height, layoutParamSize, verticalPadding)
+}
+
+private fun SVGAImageView.getTargetWidth(): Int {
+    val horizontalPadding = paddingLeft + paddingRight
+    val layoutParamSize = layoutParams?.width ?: 0
+    return getTargetDimen(width, layoutParamSize, horizontalPadding)
+}
+
+
+private fun SVGAImageView.getTargetDimen(viewSize: Int, paramSize: Int, paddingSize: Int): Int {
+    val adjustedParamSize = paramSize - paddingSize
+    if (adjustedParamSize > 0) {
+        return adjustedParamSize
+    }
+    val adjustedViewSize = viewSize - paddingSize
+    if (adjustedViewSize > 0) {
+        return adjustedViewSize
+    }
+    return 0
 }
 
 /** 判断是否重新播放原有资源，true：重新播放 */

@@ -45,7 +45,7 @@ class AnimationFromAssetsActivity : Activity() {
                 val svgaDynamicEntity = SVGADynamicEntity()
                 val textPaint = TextPaint(Paint.ANTI_ALIAS_FLAG)
                 textPaint.color = Color.WHITE
-                textPaint.textSize = 30f
+                textPaint.textSize = 20.dp.toFloat()
                 val width = textPaint.measureText(nick, 0, nick.length)
                 val builder =
                     StaticLayout.Builder.obtain(

@@ -27,7 +27,7 @@ class SVGACacheNetworkActivity : Activity() {
         path[8] = "https://res.fancyliveapp.com/headwear/1695095548666?imageslim"
         path[9] = "https://res.fancyliveapp.com/headwear/1695095567925?imageslim"
         for (index in 0 until 3) {
-            list[index]?.loadUrl(path[index] ?: "")
+            list[index]?.loadUrl(path[index] ?: "", useMemoryCache = true, isOriginal = true, loopCount = 0)
         }
 
     }
