@@ -6,6 +6,7 @@ import android.graphics.Canvas
 import android.text.BoringLayout
 import android.text.StaticLayout
 import android.text.TextPaint
+import com.opensource.svgaplayer.coroutine.SvgaCoroutineManager
 import java.net.HttpURLConnection
 import java.net.URL
 
@@ -49,7 +50,7 @@ class SVGADynamicEntity {
 
     fun setDynamicImage(url: String, forKey: String) {
         val handler = android.os.Handler()
-        SVGAParser.threadPoolExecutor.execute {
+        SvgaCoroutineManager.launchIo {
             (URL(url).openConnection() as? HttpURLConnection)?.let {
                 try {
                     it.connectTimeout = 20 * 1000

@@ -33,5 +33,6 @@ android {
 
 
 dependencies {
-    implementation 'com.squareup.wire:wire-runtime:4.4.1'
+    implementation 'com.squareup.wire:wire-runtime:4.4.3'
+    implementation "org.jetbrains.kotlinx:kotlinx-coroutines-core:1.7.3"
 }

@@ -5,9 +5,11 @@ import android.os.Handler
 import android.os.Looper
 import com.opensource.svgaplayer.cache.SVGACache
 import com.opensource.svgaplayer.cache.SVGAMemoryCache
+import com.opensource.svgaplayer.coroutine.SvgaCoroutineManager
 import com.opensource.svgaplayer.download.FileDownloader
 import com.opensource.svgaplayer.proto.MovieEntity
 import com.opensource.svgaplayer.utils.log.LogUtils
+import kotlinx.coroutines.Job
 import org.json.JSONObject
 import java.io.BufferedInputStream
 import java.io.ByteArrayOutputStream
@@ -17,9 +19,7 @@ import java.io.FileOutputStream
 import java.io.IOException
 import java.io.InputStream
 import java.net.URL
-import java.util.concurrent.Executors
 import java.util.concurrent.ThreadPoolExecutor
-import java.util.concurrent.atomic.AtomicInteger
 import java.util.zip.InflaterInputStream
 import java.util.zip.ZipInputStream
 import kotlin.properties.Delegates
@@ -47,16 +47,11 @@ class SVGAParser private constructor(context: Context) {
     companion object {
         const val TAG = "SVGAParser"
 
-        private val threadNum = AtomicInteger(0)
         private var mShareParser by Delegates.notNull<SVGAParser>()
-
-        internal var threadPoolExecutor = Executors.newCachedThreadPool { r ->
-            Thread(r, "SVGAParser-Thread-${threadNum.getAndIncrement()}")
-        }
 
         @JvmStatic
         fun setThreadPoolExecutor(executor: ThreadPoolExecutor) {
-            threadPoolExecutor = executor
+            SvgaCoroutineManager.setThreadPoolExecutor(executor)
         }
 
         @JvmStatic
@@ -95,10 +90,10 @@ class SVGAParser private constructor(context: Context) {
             return
         }
         //加载Assets数据
-        threadPoolExecutor.execute {
+        SvgaCoroutineManager.launchIo {
             try {
                 mContext?.assets?.open(name)?.let {
-                    this.decodeFromInputStream(
+                    decodeFromInputStream(
                         it,
                         SVGACache.buildCacheKey("file:///assets/$name"),
                         config,
@@ -110,7 +105,7 @@ class SVGAParser private constructor(context: Context) {
                     )
                 }
             } catch (e: Exception) {
-                this.invokeErrorCallback(e, callback, name)
+                invokeErrorCallback(e, callback, name)
             }
         }
 
@@ -120,7 +115,7 @@ class SVGAParser private constructor(context: Context) {
         url: URL,
         callback: ParseCompletion?,
         playCallback: PlayCallback? = null
-    ): (() -> Unit)? {
+    ): Job? {
         return decodeFromURL(url, config = SVGAConfig(), callback, playCallback)
     }
 
@@ -129,7 +124,7 @@ class SVGAParser private constructor(context: Context) {
         config: SVGAConfig,
         callback: ParseCompletion?,
         playCallback: PlayCallback? = null
-    ): (() -> Unit)? {
+    ): Job? {
         if (mContext == null) {
             LogUtils.error(TAG, "在配置 SVGAParser context 前, 无法解析 SVGA 文件。")
             return null
@@ -146,9 +141,9 @@ class SVGAParser private constructor(context: Context) {
         val cachedType = SVGACache.getCachedType(cacheKey)
         return if (cachedType != null) { //加载本地缓存数据
             LogUtils.info(TAG, "this url cached")
-            threadPoolExecutor.execute {
+            SvgaCoroutineManager.launchIo {
                 if (cachedType == SVGACache.Type.ZIP) {
-                    this.decodeFromUnzipDirCacheKey(
+                    decodeFromUnzipDirCacheKey(
                         cacheKey,
                         config,
                         callback,
@@ -156,7 +151,7 @@ class SVGAParser private constructor(context: Context) {
                         alias = urlPath
                     )
                 } else {
-                    this.decodeFromSVGAFileCacheKey(
+                    decodeFromSVGAFileCacheKey(
                         cacheKey,
                         config,
                         callback,
@@ -197,7 +192,7 @@ class SVGAParser private constructor(context: Context) {
         memoryCacheKey: String?,
         alias: String? = null
     ) {
-        threadPoolExecutor.execute {
+        SvgaCoroutineManager.launchIo {
             try {
                 LogUtils.info(
                     TAG,
@@ -213,7 +208,7 @@ class SVGAParser private constructor(context: Context) {
                         inputStream.reset()
                     }
                     if (isZipFile(magicCode)) {
-                        this.decodeFromUnzipDirCacheKey(
+                        decodeFromUnzipDirCacheKey(
                             cacheKey,
                             config,
                             callback,
@@ -233,12 +228,12 @@ class SVGAParser private constructor(context: Context) {
                         LogUtils.info(TAG, "SVGAVideoEntity prepare start")
                         videoItem.prepare({
                             LogUtils.info(TAG, "SVGAVideoEntity prepare success")
-                            this.invokeCompleteCallback(videoItem, callback, alias)
+                            invokeCompleteCallback(videoItem, callback, alias)
                         }, playCallback)
                     }
                 }
             } catch (e: java.lang.Exception) {
-                this.invokeErrorCallback(e, callback, alias)
+                invokeErrorCallback(e, callback, alias)
             } finally {
                 LogUtils.info(
                     TAG,
@@ -263,7 +258,7 @@ class SVGAParser private constructor(context: Context) {
             return
         }
         LogUtils.info(TAG, "================ decode $alias from input stream ================")
-        threadPoolExecutor.execute {
+        SvgaCoroutineManager.launchIo {
             try {
                 //检查是否是zip文件
                 val magicCode = ByteArray(4)
@@ -285,7 +280,7 @@ class SVGAParser private constructor(context: Context) {
                             }
                         }
                     }
-                    this.decodeFromUnzipDirCacheKey(
+                    decodeFromUnzipDirCacheKey(
                         cacheKey,
                         config,
                         callback,
@@ -303,11 +298,11 @@ class SVGAParser private constructor(context: Context) {
                     LogUtils.info(TAG, "SVGAVideoEntity prepare start")
                     videoItem.prepare({
                         LogUtils.info(TAG, "SVGAVideoEntity prepare success")
-                        this.invokeCompleteCallback(videoItem, callback, alias)
+                        invokeCompleteCallback(videoItem, callback, alias)
                     }, playCallback)
                 }
             } catch (e: java.lang.Exception) {
-                this.invokeErrorCallback(e, callback, alias)
+                invokeErrorCallback(e, callback, alias)
             } finally {
                 if (closeInputStream) {
                     inputStream.close()
