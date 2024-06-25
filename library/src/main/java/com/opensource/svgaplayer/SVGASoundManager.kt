@@ -48,11 +48,11 @@ object SVGASoundManager {
         fun onComplete()
     }
 
-    fun init() {
+    internal fun init() {
         init(20)
     }
 
-    fun init(maxStreams: Int) {
+    internal fun init(maxStreams: Int) {
         LogUtils.debug(TAG, "**************** init **************** $maxStreams")
         if (soundPool != null) {
             return

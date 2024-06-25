@@ -11,7 +11,6 @@ import android.text.TextPaint
 import android.util.Log
 import com.opensource.svgaplayer.SVGADynamicEntity
 import com.opensource.svgaplayer.SVGAImageView
-import com.opensource.svgaplayer.SVGASoundManager.init
 import com.opensource.svgaplayer.SVGAVideoEntity
 import com.opensource.svgaplayer.loadAssets
 import com.opensource.svgaplayer.utils.log.SVGALogger.setLogEnabled
@@ -28,7 +27,6 @@ class AnimationFromAssetsActivity : Activity() {
             animationView.stepToFrame(currentIndex++, false)
         }
         setLogEnabled(true)
-        init()
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
             loadAnimation()
         }
@@ -47,7 +45,7 @@ class AnimationFromAssetsActivity : Activity() {
                 val svgaDynamicEntity = SVGADynamicEntity()
                 val textPaint = TextPaint(Paint.ANTI_ALIAS_FLAG)
                 textPaint.color = Color.WHITE
-                textPaint.textSize = 15f
+                textPaint.textSize = 30f
                 val width = textPaint.measureText(nick, 0, nick.length)
                 val builder =
                     StaticLayout.Builder.obtain(
@@ -66,6 +64,7 @@ class AnimationFromAssetsActivity : Activity() {
                 if (bitmap != null) {
                     svgaDynamicEntity.setDynamicImage(bitmap, "img_10")
                 }
+                svgaDynamicEntity.setDynamicImage("https://github.com/PonyCui/resources/blob/master/svga_replace_avatar.png?raw=true", "img_60")
                 return@loadAssets svgaDynamicEntity
             }
         )

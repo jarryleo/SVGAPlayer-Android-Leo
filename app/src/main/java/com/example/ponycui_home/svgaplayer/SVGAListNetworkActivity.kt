@@ -56,7 +56,6 @@ class SVGAListNetworkActivity : Activity() {
         path[7] = "https://res.fancyliveapp.com/headwear/1695095462029?imageslim"
         path[8] = "https://res.fancyliveapp.com/headwear/1695095548666?imageslim"
         path[9] = "https://res.fancyliveapp.com/headwear/1695095567925?imageslim"
-        SVGASoundManager.init()
         for (index in 0 until 10) {
             list[index]?.loadUrl(path[index] ?: "")
         }

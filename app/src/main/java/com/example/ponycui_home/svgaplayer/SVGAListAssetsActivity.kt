@@ -33,7 +33,6 @@ class SVGAListAssetsActivity : Activity() {
         path[7] = "times3.svga"
         path[8] = "times4.svga"
         path[9] = "times5.svga"
-        SVGASoundManager.init()
         for (index in 0 until 10) {
             list[index]?.loadAssets(path[index]?:"")
         }

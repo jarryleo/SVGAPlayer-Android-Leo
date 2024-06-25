@@ -53,7 +53,7 @@ class SVGADynamicEntity {
         SvgaCoroutineManager.launchIo {
             (URL(url).openConnection() as? HttpURLConnection)?.let {
                 try {
-                    it.connectTimeout = 20 * 1000
+                    it.connectTimeout = 30 * 1000
                     it.requestMethod = "GET"
                     it.connect()
                     it.inputStream.use { stream ->
