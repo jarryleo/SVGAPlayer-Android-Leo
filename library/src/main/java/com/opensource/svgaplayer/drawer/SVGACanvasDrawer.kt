@@ -1,7 +1,17 @@
 package com.opensource.svgaplayer.drawer
 
 import android.annotation.SuppressLint
-import android.graphics.*
+import android.graphics.Bitmap
+import android.graphics.BitmapShader
+import android.graphics.Canvas
+import android.graphics.DashPathEffect
+import android.graphics.Matrix
+import android.graphics.Paint
+import android.graphics.Path
+import android.graphics.PorterDuff
+import android.graphics.PorterDuffXfermode
+import android.graphics.Rect
+import android.graphics.Shader
 import android.os.Build
 import android.text.StaticLayout
 import android.text.TextUtils
@@ -11,6 +21,7 @@ import com.opensource.svgaplayer.SVGASoundManager
 import com.opensource.svgaplayer.SVGAVideoEntity
 import com.opensource.svgaplayer.entities.SVGAVideoShapeEntity
 import kotlin.math.abs
+import kotlin.math.roundToInt
 import kotlin.math.sqrt
 
 /**
@@ -18,12 +29,12 @@ import kotlin.math.sqrt
  */
 
 internal class SVGACanvasDrawer(
-    videoItem: SVGAVideoEntity,
-    private val dynamicItem: SVGADynamicEntity?
+    videoItem: SVGAVideoEntity, private val dynamicItem: SVGADynamicEntity?
 ) : SGVADrawer(videoItem) {
 
     private val sharedValues = ShareValues()
     private val drawTextCache: HashMap<String, Bitmap> = hashMapOf()
+    private val drawTextOffsetCache: HashMap<String, Float> = hashMapOf()
     private val pathCache = PathCache()
 
     private var beginIndexList: Array<Boolean>? = null
@@ -70,11 +81,7 @@ internal class SVGACanvasDrawer(
             if (isMatteBegin(index, sprites)) {
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
                     saveID = canvas.saveLayer(
-                        0f,
-                        0f,
-                        canvas.width.toFloat(),
-                        canvas.height.toFloat(),
-                        null
+                        0f, 0f, canvas.width.toFloat(), canvas.height.toFloat(), null
                     )
                 } else {
                     canvas.save()
@@ -91,15 +98,11 @@ internal class SVGACanvasDrawer(
                         this.sharedValues.shareMatteCanvas(canvas.width, canvas.height),
                         frameIndex
                     )
-                    this.sharedValues.sharedMatteBitmap()
-                        ?.let { bitmap ->
-                            canvas.drawBitmap(
-                                bitmap,
-                                0f,
-                                0f,
-                                this.sharedValues.shareMattePaint()
-                            )
-                        }
+                    this.sharedValues.sharedMatteBitmap()?.let { bitmap ->
+                        canvas.drawBitmap(
+                            bitmap, 0f, 0f, this.sharedValues.shareMattePaint()
+                        )
+                    }
                     if (saveID != -1) {
                         canvas.restoreToCount(saveID)
                     } else {
@@ -228,12 +231,10 @@ internal class SVGACanvasDrawer(
             return
         }
         val bitmapKey = if (imageKey.endsWith(".matte")) imageKey.substring(
-            0,
-            imageKey.length - 6
+            0, imageKey.length - 6
         ) else imageKey
         val drawingBitmap =
-            (dynamicItem?.dynamicImage?.get(bitmapKey) ?: videoItem.imageMap[bitmapKey])
-                ?: return
+            (dynamicItem?.dynamicImage?.get(bitmapKey) ?: videoItem.imageMap[bitmapKey]) ?: return
         val frameMatrix = shareFrameMatrix(sprite.frameEntity.transform)
         val paint = this.sharedValues.sharedPaint()
         paint.isAntiAlias = videoItem.antiAlias
@@ -263,20 +264,17 @@ internal class SVGACanvasDrawer(
                 canvas.drawBitmap(drawingBitmap, frameMatrix, paint)
             }
         }
+        val matrixArray = floatArrayOf(0f, 0f, 0f, 0f, 0f, 0f, 0f, 0f, 0f)
+        frameMatrix.getValues(matrixArray)
+        val x0 = matrixArray[2].toInt()
+        val y0 = matrixArray[5].toInt()
+        val x1 = (drawingBitmap.width * matrixArray[0] + matrixArray[2]).toInt()
+        val y1 = (drawingBitmap.height * matrixArray[4] + matrixArray[5]).toInt()
+        val rect = Rect(x0, y0, x1, y1)
         dynamicItem?.dynamicIClickArea.let {
-            it?.get(imageKey)?.let { listener ->
-                val matrixArray = floatArrayOf(0f, 0f, 0f, 0f, 0f, 0f, 0f, 0f, 0f)
-                frameMatrix.getValues(matrixArray)
-                listener.onResponseArea(
-                    imageKey,
-                    matrixArray[2].toInt(),
-                    matrixArray[5].toInt(),
-                    (drawingBitmap.width * matrixArray[0] + matrixArray[2]).toInt(),
-                    (drawingBitmap.height * matrixArray[4] + matrixArray[5]).toInt()
-                )
-            }
+            it?.get(imageKey)?.onResponseArea(imageKey, x0, y0, x1, y1)
         }
-        drawTextOnBitmap(canvas, drawingBitmap, sprite, frameMatrix)
+        drawTextOnBitmap(canvas, drawingBitmap, sprite, frameMatrix, rect)
     }
 
     @SuppressLint("DiscouragedPrivateApi")
@@ -284,7 +282,8 @@ internal class SVGACanvasDrawer(
         canvas: Canvas,
         drawingBitmap: Bitmap,
         sprite: SVGADrawerSprite,
-        frameMatrix: Matrix
+        frameMatrix: Matrix,
+        rect: Rect
     ) {
         if (dynamicItem?.isTextDirty == true) {
             this.drawTextCache.clear()
@@ -298,9 +297,7 @@ internal class SVGACanvasDrawer(
                     textBitmap = it
                 } ?: kotlin.run {
                     val bitmap = Bitmap.createBitmap(
-                        drawingBitmap.width,
-                        drawingBitmap.height,
-                        Bitmap.Config.ARGB_8888
+                        drawingBitmap.width, drawingBitmap.height, Bitmap.Config.ARGB_8888
                     )
                     textBitmap = bitmap
                     val drawRect = Rect(0, 0, drawingBitmap.width, drawingBitmap.height)
@@ -311,10 +308,7 @@ internal class SVGACanvasDrawer(
                     val bottom = fontMetrics.bottom
                     val baseLineY = drawRect.centerY() - top / 2 - bottom / 2
                     textCanvas.drawText(
-                        drawingText,
-                        drawRect.centerX().toFloat(),
-                        baseLineY,
-                        drawingTextPaint
+                        drawingText, drawRect.centerX().toFloat(), baseLineY, drawingTextPaint
                     )
                     drawTextCache.put(imageKey, bitmap)
                 }
@@ -327,9 +321,7 @@ internal class SVGACanvasDrawer(
             } ?: kotlin.run {
                 it.paint.isAntiAlias = true
                 val bitmap = Bitmap.createBitmap(
-                    drawingBitmap.width,
-                    drawingBitmap.height,
-                    Bitmap.Config.ARGB_8888
+                    drawingBitmap.width, drawingBitmap.height, Bitmap.Config.ARGB_8888
                 )
                 textBitmap = bitmap
                 val textCanvas = Canvas(bitmap)
@@ -344,28 +336,29 @@ internal class SVGACanvasDrawer(
                 textBitmap = it
             } ?: kotlin.run {
                 it.paint.isAntiAlias = true
+                val lineMax = try {
+                    val field =
+                        StaticLayout::class.java.getDeclaredField("mMaximumVisibleLineCount")
+                    field.isAccessible = true
+                    field.getInt(it)
+                } catch (e: Exception) {
+                    Int.MAX_VALUE
+                }
+                //是否是跑马灯文本，是的话文本 bitmap 宽度为 textWidth，否则为 drawingBitmap 宽度
+                val textWidth = it.paint.measureText(it.text, 0, it.text.length).roundToInt()
+                val isMarquee = (lineMax == 1 && textWidth > drawingBitmap.width)
+                val targetWidth = if (isMarquee) textWidth else drawingBitmap.width
                 val layout = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                    val lineMax = try {
-                        val field =
-                            StaticLayout::class.java.getDeclaredField("mMaximumVisibleLineCount")
-                        field.isAccessible = true
-                        field.getInt(it)
-                    } catch (e: Exception) {
-                        Int.MAX_VALUE
-                    }
-                    StaticLayout.Builder
-                        .obtain(it.text, 0, it.text.length, it.paint, drawingBitmap.width)
-                        .setAlignment(it.alignment)
-                        .setMaxLines(lineMax)
-                        .setEllipsize(TextUtils.TruncateAt.END)
-                        .build()
+                    StaticLayout.Builder.obtain(it.text, 0, it.text.length, it.paint, targetWidth)
+                        .setAlignment(it.alignment).setMaxLines(lineMax)
+                        .setEllipsize(TextUtils.TruncateAt.END).build()
                 } else {
                     StaticLayout(
                         it.text,
                         0,
                         it.text.length,
                         it.paint,
-                        drawingBitmap.width,
+                        targetWidth,
                         it.alignment,
                         it.spacingMultiplier,
                         it.spacingAdd,
@@ -373,15 +366,13 @@ internal class SVGACanvasDrawer(
                     )
                 }
                 val bitmap = Bitmap.createBitmap(
-                    drawingBitmap.width,
-                    drawingBitmap.height,
-                    Bitmap.Config.ARGB_8888
+                    targetWidth, drawingBitmap.height, Bitmap.Config.ARGB_8888
                 )
                 textBitmap = bitmap
                 val textCanvas = Canvas(bitmap)
                 textCanvas.translate(0f, ((drawingBitmap.height - layout.height) / 2).toFloat())
                 layout.draw(textCanvas)
-                drawTextCache.put(imageKey, bitmap)
+                drawTextCache[imageKey] = bitmap
             }
         }
         textBitmap?.let { bitmap ->
@@ -401,11 +392,56 @@ internal class SVGACanvasDrawer(
                 canvas.drawPath(path, paint)
                 canvas.restore()
             } else {
-                paint.isFilterBitmap = videoItem.antiAlias
-                canvas.drawBitmap(bitmap, frameMatrix, paint)
+                val isMarquee = bitmap.width > rect.width()
+                if (isMarquee) {
+                    drawMarquee(imageKey, rect, canvas, bitmap, paint)
+                } else {
+                    paint.isFilterBitmap = videoItem.antiAlias
+                    canvas.drawBitmap(bitmap, frameMatrix, paint)
+                }
             }
         }
     }
+
+    /**
+     * 绘制跑马灯
+     */
+    private fun drawMarquee(
+        imageKey: String, rect: Rect, canvas: Canvas, bitmap: Bitmap, paint: Paint
+    ) {
+        val defOffset = -60f
+        //每帧偏移量，目前svga动画每秒 15帧，每帧偏移 1px， -15 表示停顿1秒
+        var offsetX = drawTextOffsetCache[imageKey] ?: defOffset
+        offsetX += 2f
+        //截取文字的左侧
+        val srcLeft = maxOf(0f, offsetX).roundToInt()
+        //截取文字的右侧
+        val srcWidth = minOf(rect.width(), bitmap.width - srcLeft) //可能为负数
+        val srcRight = srcLeft + srcWidth
+        //绘制左边文本 还未显示到结尾就是全部文本
+        if (srcWidth > 0) {
+            val srcRect = Rect(srcLeft, 0, srcRight, bitmap.height)
+            val destRect = Rect(rect.left, rect.top, rect.left + srcWidth, rect.bottom)
+            canvas.drawBitmap(bitmap, srcRect, destRect, paint)
+        }
+        val rightEmpty = rect.width() - srcWidth
+        //绘制右边文本
+        val haftRectWidth = rect.width() / 2
+        val rightWidth = minOf(haftRectWidth - srcWidth, rect.width()) //右侧需要绘制的文本宽度
+        if (rightEmpty > haftRectWidth) { //如果右边空余超过一半，绘制右边文本
+            val srcRect = Rect(0, 0, rightWidth, rect.height())
+            val dstRect =
+                Rect(rect.left + rect.width() - rightWidth, rect.top, rect.right, rect.bottom)
+            canvas.drawBitmap(bitmap, srcRect, dstRect, paint)
+        }
+        if (rightWidth >= rect.width()) {
+            offsetX = defOffset
+        }
+        drawTextOffsetCache[imageKey] = offsetX
+        //todo 绘制左右透明度渐变 , 阿拉伯语反向marquee，帧率FPS不同速度不同。
+
+    }
+
 
     private fun drawShape(sprite: SVGADrawerSprite, canvas: Canvas) {
         val frameMatrix = shareFrameMatrix(sprite.frameEntity.transform)
