@@ -39,6 +39,7 @@ internal class SVGACanvasDrawer(
     private val drawTextCache: HashMap<String, Bitmap> = hashMapOf()
     private val drawTextOffsetCache: HashMap<String, Float> = hashMapOf()
     private val drawTextRtlCache: HashMap<String, Boolean> = hashMapOf()
+    private val drawTextMarqueeCache: HashMap<String, Boolean> = hashMapOf()
     private val pathCache = PathCache()
 
     private var beginIndexList: Array<Boolean>? = null
@@ -374,7 +375,9 @@ internal class SVGACanvasDrawer(
                 }
                 //是否是跑马灯文本，是的话文本 bitmap 宽度为 textWidth，否则为 drawingBitmap 宽度
                 val textWidth = it.paint.measureText(it.toString()).roundToInt()
-                val isMarquee = (lineMax == 1 && textWidth > drawingBitmap.width)
+                val textHeight = it.height
+                val isMarquee = (lineMax == 1 && textWidth > drawingBitmap.width && it.width != Int.MAX_VALUE)
+                drawTextMarqueeCache[imageKey] = isMarquee
                 val targetWidth = if (isMarquee) textWidth else drawingBitmap.width
                 val layout = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
                     StaticLayout.Builder.obtain(it.text, 0, it.text.length, it.paint, targetWidth)
@@ -396,11 +399,13 @@ internal class SVGACanvasDrawer(
 
                 drawTextRtlCache[imageKey] = layout.text.indices.any { layout.isRtlCharAt(it) }
                 val bitmap = Bitmap.createBitmap(
-                    targetWidth, drawingBitmap.height, Bitmap.Config.ARGB_8888
+                    targetWidth, textHeight, Bitmap.Config.ARGB_8888
                 )
                 textBitmap = bitmap
                 val textCanvas = Canvas(bitmap)
-                textCanvas.translate(0f, ((drawingBitmap.height - layout.height) / 2).toFloat())
+                if (!isMarquee) {
+                    textCanvas.translate(0f, ((drawingBitmap.height - layout.height) / 2).toFloat())
+                }
                 layout.draw(textCanvas)
                 drawTextCache[imageKey] = bitmap
 
@@ -423,7 +428,7 @@ internal class SVGACanvasDrawer(
                 canvas.drawPath(path, paint)
                 canvas.restore()
             } else {
-                val isMarquee = bitmap.width > rect.width()
+                val isMarquee = drawTextMarqueeCache[imageKey] ?: false
                 if (isMarquee) {
                     drawMarquee(imageKey, rect, canvas, bitmap, paint)
                 } else {
@@ -477,7 +482,7 @@ internal class SVGACanvasDrawer(
         }
         val leftSpace = rect.width() - srcWidth //剩余空间
         //绘制首位相接部分的下一段首部文本
-        val spaceWidth = rect.width() / 3 // 首位相接中间空余 三分之一
+        val spaceWidth = 0 // 首位相接中间空余
         val lastWidth = minOf(leftSpace - spaceWidth, rect.width()) //右侧需要绘制的文本宽度
         if (leftSpace > spaceWidth) { //如果右边空余超过一半，绘制右边文本
             val srcRect =
@@ -485,7 +490,7 @@ internal class SVGACanvasDrawer(
                     if (isRtl) bitmap.width - lastWidth else 0,
                     0,
                     if (isRtl) bitmap.width else lastWidth,
-                    rect.height()
+                    bitmap.height
                 )
             val dstRect =
                 Rect(

@@ -10,11 +10,13 @@ import android.text.StaticLayout
 import android.text.TextPaint
 import android.text.TextUtils
 import android.util.Log
+import android.view.ViewGroup
 import com.opensource.svgaplayer.SVGADynamicEntity
 import com.opensource.svgaplayer.SVGAImageView
 import com.opensource.svgaplayer.SVGAVideoEntity
 import com.opensource.svgaplayer.loadAssets
 import com.opensource.svgaplayer.utils.log.SVGALogger.setLogEnabled
+import kotlin.math.roundToInt
 
 class AnimationFromAssetsActivity : Activity() {
     private var currentIndex: Int = 0
@@ -24,6 +26,7 @@ class AnimationFromAssetsActivity : Activity() {
         super.onCreate(savedInstanceState)
         animationView = SVGAImageView(this)
         animationView.setBackgroundColor(Color.BLACK)
+
         /*animationView.setOnClickListener {
             animationView.stepToFrame(currentIndex++, false)
         }*/
@@ -31,7 +34,7 @@ class AnimationFromAssetsActivity : Activity() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
             loadAnimation()
         }
-        setContentView(animationView)
+        setContentView(animationView, ViewGroup.LayoutParams(400,400) )
     }
 
     @RequiresApi(api = Build.VERSION_CODES.M)
@@ -47,19 +50,21 @@ class AnimationFromAssetsActivity : Activity() {
                 val svgaDynamicEntity = SVGADynamicEntity()
                 val textPaint = TextPaint(Paint.ANTI_ALIAS_FLAG)
                 textPaint.color = Color.WHITE
-                textPaint.textSize = 12.dp.toFloat()
-                val width = textPaint.measureText(nick, 0, nick.length)
+                textPaint.textSize = 10.dp.toFloat()
+                val width = textPaint.measureText(nick).roundToInt()
+//                val width = Int.MAX_VALUE
                 val builder =
                     StaticLayout.Builder.obtain(
                         nick,
                         0,
                         nick.length,
                         textPaint,
-                        width.toInt()
+                        width
                     )
                 val build = builder
                     .setMaxLines(1)
                     .setEllipsize(TextUtils.TruncateAt.MARQUEE)
+//                    .setEllipsize(TextUtils.TruncateAt.END)
                     .build()
                 svgaDynamicEntity.setDynamicText(build, "NICK1")
                 return@loadAssets svgaDynamicEntity

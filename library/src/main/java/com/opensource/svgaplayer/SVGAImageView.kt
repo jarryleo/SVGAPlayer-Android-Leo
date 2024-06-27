@@ -258,11 +258,11 @@ open class SVGAImageView @JvmOverloads constructor(
         callback?.onResume()
     }
 
-    private fun stopAnimation() {
+    fun stopAnimation() {
         stopAnimation(clear = clearsAfterStop)
     }
 
-    private fun stopAnimation(clear: Boolean) {
+    fun stopAnimation(clear: Boolean) {
         mAnimator?.cancel()
         mAnimator?.removeAllListeners()
         mAnimator?.removeAllUpdateListeners()
