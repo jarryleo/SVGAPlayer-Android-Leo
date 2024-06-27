@@ -4,7 +4,9 @@ import android.annotation.SuppressLint
 import android.graphics.Bitmap
 import android.graphics.BitmapShader
 import android.graphics.Canvas
+import android.graphics.Color
 import android.graphics.DashPathEffect
+import android.graphics.LinearGradient
 import android.graphics.Matrix
 import android.graphics.Paint
 import android.graphics.Path
@@ -35,10 +37,35 @@ internal class SVGACanvasDrawer(
     private val sharedValues = ShareValues()
     private val drawTextCache: HashMap<String, Bitmap> = hashMapOf()
     private val drawTextOffsetCache: HashMap<String, Float> = hashMapOf()
+    private val drawTextRtlCache: HashMap<String, Boolean> = hashMapOf()
     private val pathCache = PathCache()
 
     private var beginIndexList: Array<Boolean>? = null
     private var endIndexList: Array<Boolean>? = null
+
+    private val marqueeLinearGradientWidth = 20f
+    private val marqueeLeftLinearGradient by lazy {
+        LinearGradient(
+            0f,
+            0f,
+            marqueeLinearGradientWidth,
+            0f,
+            Color.TRANSPARENT,
+            Color.BLACK,
+            Shader.TileMode.CLAMP
+        )
+    }
+    private val marqueeRightLinearGradient by lazy {
+        LinearGradient(
+            0f,
+            0f,
+            marqueeLinearGradientWidth,
+            0f,
+            Color.BLACK,
+            Color.TRANSPARENT,
+            Shader.TileMode.CLAMP
+        )
+    }
 
     override fun drawFrame(canvas: Canvas, frameIndex: Int, scaleType: ImageView.ScaleType) {
         super.drawFrame(canvas, frameIndex, scaleType)
@@ -345,7 +372,7 @@ internal class SVGACanvasDrawer(
                     Int.MAX_VALUE
                 }
                 //是否是跑马灯文本，是的话文本 bitmap 宽度为 textWidth，否则为 drawingBitmap 宽度
-                val textWidth = it.paint.measureText(it.text, 0, it.text.length).roundToInt()
+                val textWidth = it.paint.measureText(it.toString()).roundToInt()
                 val isMarquee = (lineMax == 1 && textWidth > drawingBitmap.width)
                 val targetWidth = if (isMarquee) textWidth else drawingBitmap.width
                 val layout = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
@@ -365,6 +392,8 @@ internal class SVGACanvasDrawer(
                         false
                     )
                 }
+
+                drawTextRtlCache[imageKey] = layout.text.indices.any { layout.isRtlCharAt(it) }
                 val bitmap = Bitmap.createBitmap(
                     targetWidth, drawingBitmap.height, Bitmap.Config.ARGB_8888
                 )
@@ -373,6 +402,7 @@ internal class SVGACanvasDrawer(
                 textCanvas.translate(0f, ((drawingBitmap.height - layout.height) / 2).toFloat())
                 layout.draw(textCanvas)
                 drawTextCache[imageKey] = bitmap
+
             }
         }
         textBitmap?.let { bitmap ->
@@ -409,36 +439,67 @@ internal class SVGACanvasDrawer(
     private fun drawMarquee(
         imageKey: String, rect: Rect, canvas: Canvas, bitmap: Bitmap, paint: Paint
     ) {
-        val defOffset = -60f
+        val isRtl = drawTextRtlCache[imageKey] ?: false
+        val fps = videoItem.FPS
+        //每秒偏移30像素，计算每帧需要偏移多少像素
+        val speed = maxOf(30f / fps, 1f)
+        val defOffset = -speed * fps //停顿1秒
         //每帧偏移量，目前svga动画每秒 15帧，每帧偏移 1px， -15 表示停顿1秒
         var offsetX = drawTextOffsetCache[imageKey] ?: defOffset
         offsetX += 2f
-        //截取文字的左侧
-        val srcLeft = maxOf(0f, offsetX).roundToInt()
-        //截取文字的右侧
-        val srcWidth = minOf(rect.width(), bitmap.width - srcLeft) //可能为负数
-        val srcRight = srcLeft + srcWidth
-        //绘制左边文本 还未显示到结尾就是全部文本
+        //截取文字的起始点，如果是rtl，从右侧开始
+        val srcStart = if (isRtl) {
+            minOf(bitmap.width.toFloat(), bitmap.width - offsetX).roundToInt()
+        } else {
+            maxOf(0f, offsetX).roundToInt()
+        }
+        //需要截取的宽度
+        val srcWidth = if (isRtl) minOf(rect.width(), srcStart)
+        else minOf(rect.width(), bitmap.width - srcStart)
+        val srcEnd = if (isRtl) srcStart - srcWidth else srcStart + srcWidth
+        //绘制原始文本 还未显示到结尾就是全部文本
         if (srcWidth > 0) {
-            val srcRect = Rect(srcLeft, 0, srcRight, bitmap.height)
-            val destRect = Rect(rect.left, rect.top, rect.left + srcWidth, rect.bottom)
+            val srcRect = Rect(
+                if (isRtl) srcEnd else srcStart,
+                0,
+                if (isRtl) srcStart else srcEnd,
+                bitmap.height
+            )
+            val destRect = Rect(
+                if (isRtl) rect.right - srcWidth else rect.left,
+                rect.top,
+                if (isRtl) rect.right else rect.left + srcWidth,
+                rect.bottom
+            )
             canvas.drawBitmap(bitmap, srcRect, destRect, paint)
         }
-        val rightEmpty = rect.width() - srcWidth
-        //绘制右边文本
-        val haftRectWidth = rect.width() / 2
-        val rightWidth = minOf(haftRectWidth - srcWidth, rect.width()) //右侧需要绘制的文本宽度
-        if (rightEmpty > haftRectWidth) { //如果右边空余超过一半，绘制右边文本
-            val srcRect = Rect(0, 0, rightWidth, rect.height())
+        val leftSpace = rect.width() - srcWidth //剩余空间
+        //绘制首位相接部分的下一段首部文本
+        val spaceWidth = rect.width() / 3 // 首位相接中间空余 三分之一
+        val lastWidth = minOf(rect.width() - spaceWidth - srcWidth, rect.width()) //右侧需要绘制的文本宽度
+        if (leftSpace > spaceWidth) { //如果右边空余超过一半，绘制右边文本
+            val srcRect =
+                Rect(
+                    if (isRtl) bitmap.width - lastWidth else 0,
+                    0,
+                    if (isRtl) bitmap.width else lastWidth,
+                    rect.height()
+                )
             val dstRect =
-                Rect(rect.left + rect.width() - rightWidth, rect.top, rect.right, rect.bottom)
+                Rect(
+                    if (isRtl) rect.left else rect.left + rect.width() - lastWidth,
+                    rect.top,
+                    if (isRtl) rect.left + lastWidth else rect.right,
+                    rect.bottom
+                )
             canvas.drawBitmap(bitmap, srcRect, dstRect, paint)
         }
-        if (rightWidth >= rect.width()) {
+        if (lastWidth >= rect.width()) {
             offsetX = defOffset
         }
         drawTextOffsetCache[imageKey] = offsetX
-        //todo 绘制左右透明度渐变 , 阿拉伯语反向marquee，帧率FPS不同速度不同。
+        //宽度太小，不绘制阴影部分
+        if (rect.width() < marqueeLinearGradientWidth * 2) return
 
     }
 
