@@ -374,9 +374,9 @@ internal class SVGACanvasDrawer(
                     Int.MAX_VALUE
                 }
                 //是否是跑马灯文本，是的话文本 bitmap 宽度为 textWidth，否则为 drawingBitmap 宽度
-                val textWidth = it.paint.measureText(it.toString()).roundToInt()
-                val textHeight = it.height
-                val isMarquee = (lineMax == 1 && textWidth > drawingBitmap.width && it.width != Int.MAX_VALUE)
+                val textWidth = it.paint.measureText(it.text, 0, it.text.length).roundToInt()
+                val isMarquee =
+                    (lineMax == 1 && textWidth > drawingBitmap.width && it.width != Int.MAX_VALUE)
                 drawTextMarqueeCache[imageKey] = isMarquee
                 val targetWidth = if (isMarquee) textWidth else drawingBitmap.width
                 val layout = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
@@ -399,13 +399,13 @@ internal class SVGACanvasDrawer(
 
                 drawTextRtlCache[imageKey] = layout.text.indices.any { layout.isRtlCharAt(it) }
                 val bitmap = Bitmap.createBitmap(
-                    targetWidth, textHeight, Bitmap.Config.ARGB_8888
+                    targetWidth, drawingBitmap.height, Bitmap.Config.ARGB_8888
                 )
                 textBitmap = bitmap
                 val textCanvas = Canvas(bitmap)
-                if (!isMarquee) {
-                    textCanvas.translate(0f, ((drawingBitmap.height - layout.height) / 2).toFloat())
-                }
+                val scale = drawingBitmap.height / layout.height.toFloat()
+                //textCanvas.translate(0f, ((drawingBitmap.height - layout.height) / 2).toFloat())
+                textCanvas.scale(1f, scale)
                 layout.draw(textCanvas)
                 drawTextCache[imageKey] = bitmap
 
@@ -482,7 +482,8 @@ internal class SVGACanvasDrawer(
         }
         val leftSpace = rect.width() - srcWidth //剩余空间
         //绘制首位相接部分的下一段首部文本
-        val spaceWidth = 0 // 首位相接中间空余
+        val spaceWidth =
+            minOf(rect.width() / 3, (marqueeLinearGradientWidth * 2).roundToInt()) // 首位相接中间空余
         val lastWidth = minOf(leftSpace - spaceWidth, rect.width()) //右侧需要绘制的文本宽度
         if (leftSpace > spaceWidth) { //如果右边空余超过一半，绘制右边文本
             val srcRect =
