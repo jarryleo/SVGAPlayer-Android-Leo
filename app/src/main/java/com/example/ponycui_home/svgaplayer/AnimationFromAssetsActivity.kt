@@ -42,8 +42,8 @@ class AnimationFromAssetsActivity : Activity() {
             isOriginal = true,
             loopCount = 0,
             dynamicCallback = { svgaVideoEntity: SVGAVideoEntity? ->
-                //val nick = "nick:test MARQUEE 测试跑马灯"
-                val nick = "خدمة متجر جوجل غير متوفرة"
+                val nick = "nick:test MARQUEE 测试跑马灯"
+//                val nick = "خدمة متجر جوجل غير متوفرة"
                 val svgaDynamicEntity = SVGADynamicEntity()
                 val textPaint = TextPaint(Paint.ANTI_ALIAS_FLAG)
                 textPaint.color = Color.WHITE

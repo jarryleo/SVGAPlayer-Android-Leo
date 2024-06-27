@@ -13,6 +13,7 @@ import android.graphics.Path
 import android.graphics.PorterDuff
 import android.graphics.PorterDuffXfermode
 import android.graphics.Rect
+import android.graphics.RectF
 import android.graphics.Shader
 import android.os.Build
 import android.text.StaticLayout
@@ -439,6 +440,7 @@ internal class SVGACanvasDrawer(
     private fun drawMarquee(
         imageKey: String, rect: Rect, canvas: Canvas, bitmap: Bitmap, paint: Paint
     ) {
+        val layer = canvas.saveLayer(RectF(rect), paint)
         val isRtl = drawTextRtlCache[imageKey] ?: false
         val fps = videoItem.FPS
         //每秒偏移30像素，计算每帧需要偏移多少像素
@@ -476,7 +478,7 @@ internal class SVGACanvasDrawer(
         val leftSpace = rect.width() - srcWidth //剩余空间
         //绘制首位相接部分的下一段首部文本
         val spaceWidth = rect.width() / 3 // 首位相接中间空余 三分之一
-        val lastWidth = minOf(rect.width() - spaceWidth - srcWidth, rect.width()) //右侧需要绘制的文本宽度
+        val lastWidth = minOf(leftSpace - spaceWidth, rect.width()) //右侧需要绘制的文本宽度
         if (leftSpace > spaceWidth) { //如果右边空余超过一半，绘制右边文本
             val srcRect =
                 Rect(
@@ -499,8 +501,23 @@ internal class SVGACanvasDrawer(
         }
         drawTextOffsetCache[imageKey] = offsetX
         //宽度太小，不绘制阴影部分
-        if (rect.width() < marqueeLinearGradientWidth * 2) return
-
+        val isDrawLinearGradient = rect.width() > marqueeLinearGradientWidth * 2
+        val isWait = offsetX < 0
+        if (isDrawLinearGradient) {
+            paint.xfermode = PorterDuffXfermode(PorterDuff.Mode.DST_IN)
+            if (!isWait || isRtl) {
+                paint.shader = marqueeLeftLinearGradient
+                canvas.translate(rect.left.toFloat(), rect.top.toFloat())
+                canvas.drawRect(0f, 0f, marqueeLinearGradientWidth, rect.height().toFloat(), paint)
+            }
+            if (!isWait || !isRtl) {
+                paint.shader = marqueeRightLinearGradient
+                canvas.translate(rect.width() - marqueeLinearGradientWidth, 0f)
+                canvas.drawRect(0f, 0f, marqueeLinearGradientWidth, rect.height().toFloat(), paint)
+            }
+            paint.shader = null
+        }
+        canvas.restoreToCount(layer)
     }
 
 
