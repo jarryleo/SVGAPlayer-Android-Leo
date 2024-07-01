@@ -20,11 +20,11 @@ internal class SVGAVideoSpriteEntity {
         val mutableFrames: MutableList<SVGAVideoSpriteFrameEntity> = mutableListOf()
         obj.optJSONArray("frames")?.let {
             for (i in 0 until it.length()) {
-                it.optJSONObject(i)?.let {
-                    val frameItem = SVGAVideoSpriteFrameEntity(it)
+                it.optJSONObject(i)?.let { frame ->
+                    val frameItem = SVGAVideoSpriteFrameEntity(frame)
                     if (frameItem.shapes.isNotEmpty()) {
-                        frameItem.shapes.first().let {
-                            if (it.isKeep && mutableFrames.size > 0) {
+                        frameItem.shapes.first().let { shape ->
+                            if (shape.isKeep && mutableFrames.size > 0) {
                                 frameItem.shapes = mutableFrames.last().shapes
                             }
                         }
@@ -40,13 +40,13 @@ internal class SVGAVideoSpriteEntity {
         this.imageKey = obj.imageKey
         this.matteKey = obj.matteKey
         var lastFrame: SVGAVideoSpriteFrameEntity? = null
-        frames = obj.frames?.map {
-            val frameItem = SVGAVideoSpriteFrameEntity(it)
+        frames = obj.frames?.map { frame ->
+            val frameItem = SVGAVideoSpriteFrameEntity(frame)
             if (frameItem.shapes.isNotEmpty()) {
-                frameItem.shapes.first().let {
-                    if (it.isKeep) {
-                        lastFrame?.let {
-                            frameItem.shapes = it.shapes
+                frameItem.shapes.first().let { shape ->
+                    if (shape.isKeep) {
+                        lastFrame?.let { last ->
+                            frameItem.shapes = last.shapes
                         }
                     }
                 }

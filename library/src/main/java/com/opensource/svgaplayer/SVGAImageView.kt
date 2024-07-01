@@ -98,8 +98,14 @@ open class SVGAImageView @JvmOverloads constructor(
         val refImgView = WeakReference<SVGAImageView>(this)
         val parser = SVGAParser.shareParser()
         if (source.startsWith("http://") || source.startsWith("https://")) {
+            val url = try {
+                URL(source)
+            } catch (e: Exception) {
+                e.printStackTrace()
+                return
+            }
             parser.decodeFromURL(
-                URL(source),
+                url,
                 config = SVGAConfig(),
                 createParseCompletion(refImgView)
             )

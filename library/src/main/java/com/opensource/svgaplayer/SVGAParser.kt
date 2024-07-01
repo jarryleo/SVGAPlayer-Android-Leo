@@ -243,7 +243,7 @@ class SVGAParser private constructor(context: Context) {
         }
     }
 
-    fun decodeFromInputStream(
+    private fun decodeFromInputStream(
         inputStream: InputStream,
         cacheKey: String,
         config: SVGAConfig,
