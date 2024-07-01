@@ -2,13 +2,7 @@ package com.example.ponycui_home.svgaplayer
 
 import android.app.Activity
 import android.os.Bundle
-import com.opensource.svgaplayer.SVGAConfig
 import com.opensource.svgaplayer.SVGAImageView
-import com.opensource.svgaplayer.SVGAParser.Companion.shareParser
-import com.opensource.svgaplayer.SVGAParser.ParseCompletion
-import com.opensource.svgaplayer.SVGASoundManager
-import com.opensource.svgaplayer.SVGAVideoEntity
-import java.net.URL
 
 class SVGACacheAssetsActivity : Activity() {
 
@@ -33,25 +27,7 @@ class SVGACacheAssetsActivity : Activity() {
         path[9] = "times5.svga"
         for (index in 0 until 3) {
 //            list[index].loadAssets(path[(System.currentTimeMillis().toInt()%10)])
-            list[index].loadAssets(path[index])
+            list[index]?.load(path[index])
         }
-//        list[2].loadAssets(path[(System.currentTimeMillis().toInt()%10)])
     }
-
-    private fun SVGAImageView?.loadAssets(path: String?) {
-        if (this == null || path.isNullOrEmpty()) {
-            return
-        }
-        val svgaParser = shareParser()
-        svgaParser.decodeFromAssets(path, config = SVGAConfig(frameWidth = 100, frameHeight = 100, isCacheToMemory = true), object : ParseCompletion {
-            override fun onComplete(videoItem: SVGAVideoEntity) {
-                setVideoItem(videoItem)
-                startAnimation()
-            }
-
-            override fun onError() {
-            }
-        }, null)
-    }
-
 }

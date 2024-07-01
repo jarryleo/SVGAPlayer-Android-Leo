@@ -10,6 +10,7 @@ import com.opensource.svgaplayer.download.FileDownloader
 import com.opensource.svgaplayer.proto.MovieEntity
 import com.opensource.svgaplayer.utils.log.LogUtils
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.isActive
 import org.json.JSONObject
 import java.io.BufferedInputStream
 import java.io.ByteArrayOutputStream
@@ -32,6 +33,7 @@ private var isUnzipping = false
 
 class SVGAParser private constructor(context: Context) {
     private var mContext = context.applicationContext
+    private val handler = Handler(Looper.getMainLooper())
 
     interface ParseCompletion {
         fun onComplete(videoItem: SVGAVideoEntity)
@@ -68,8 +70,8 @@ class SVGAParser private constructor(context: Context) {
         name: String,
         callback: ParseCompletion?,
         playCallback: PlayCallback? = null
-    ) {
-        decodeFromAssets(name, config = SVGAConfig(), callback, playCallback)
+    ): Job? {
+        return decodeFromAssets(name, config = SVGAConfig(), callback, playCallback)
     }
 
     fun decodeFromAssets(
@@ -77,20 +79,20 @@ class SVGAParser private constructor(context: Context) {
         config: SVGAConfig,
         callback: ParseCompletion?,
         playCallback: PlayCallback? = null
-    ) {
+    ): Job? {
         if (mContext == null) {
             LogUtils.error(TAG, "在配置 SVGAParser context 前, 无法解析 SVGA 文件。")
-            return
+            return null
         }
         LogUtils.info(TAG, "================ decode $name from assets ================")
         //加载内存缓存数据
         val memoryCacheKey: String? =
             if (config.isCacheToMemory) SVGAMemoryCache.createKey(name, config) else null
         if (decodeFromMemoryCacheKey(memoryCacheKey, config, callback, playCallback, name)) {
-            return
+            return null
         }
         //加载Assets数据
-        SvgaCoroutineManager.launchIo {
+        return SvgaCoroutineManager.launchIo {
             try {
                 mContext?.assets?.open(name)?.let {
                     decodeFromInputStream(
@@ -108,7 +110,6 @@ class SVGAParser private constructor(context: Context) {
                 invokeErrorCallback(e, callback, name)
             }
         }
-
     }
 
     fun decodeFromURL(
@@ -184,7 +185,7 @@ class SVGAParser private constructor(context: Context) {
     /**
      * 读取解析本地缓存的 svga 文件.
      */
-    fun decodeFromSVGAFileCacheKey(
+    private fun decodeFromSVGAFileCacheKey(
         cacheKey: String,
         config: SVGAConfig,
         callback: ParseCompletion?,
@@ -252,13 +253,13 @@ class SVGAParser private constructor(context: Context) {
         playCallback: PlayCallback? = null,
         memoryCacheKey: String?,
         alias: String? = null
-    ) {
+    ): Job? {
         if (mContext == null) {
             LogUtils.error(TAG, "在配置 SVGAParser context 前, 无法解析 SVGA 文件。")
-            return
+            return null
         }
         LogUtils.info(TAG, "================ decode $alias from input stream ================")
-        SvgaCoroutineManager.launchIo {
+        return SvgaCoroutineManager.launchIo {
             try {
                 //检查是否是zip文件
                 val magicCode = ByteArray(4)
@@ -342,7 +343,7 @@ class SVGAParser private constructor(context: Context) {
         callback: ParseCompletion?,
         alias: String?
     ) {
-        Handler(Looper.getMainLooper()).post {
+        handler.post {
             LogUtils.info(TAG, "================ $alias parser complete ================")
             callback?.onComplete(videoItem)
         }
@@ -356,7 +357,7 @@ class SVGAParser private constructor(context: Context) {
         e.printStackTrace()
         LogUtils.error(TAG, "================ $alias parser error ================")
         LogUtils.error(TAG, "$alias parse error", e)
-        Handler(Looper.getMainLooper()).post {
+        handler.post {
             callback?.onError()
         }
     }
@@ -370,80 +371,82 @@ class SVGAParser private constructor(context: Context) {
         callback: ParseCompletion?,
         memoryCacheKey: String?,
         alias: String?
-    ) {
+    ): Job? {
         LogUtils.info(TAG, "================ decode $alias from cache ================")
         LogUtils.debug(TAG, "decodeFromCacheKey called with cacheKey : $cacheKey")
         if (mContext == null) {
             LogUtils.error(TAG, "在配置 SVGAParser context 前, 无法解析 SVGA 文件。")
-            return
+            return null
         }
-        try {
-            val cacheDir = SVGACache.buildCacheDir(cacheKey)
-            File(cacheDir, "movie.binary").takeIf { it.isFile }?.let { binaryFile ->
-                try {
-                    LogUtils.info(TAG, "binary change to entity")
-                    FileInputStream(binaryFile).use {
-                        LogUtils.info(TAG, "binary change to entity success")
-                        this.invokeCompleteCallback(
-                            SVGAVideoEntity(
-                                MovieEntity.ADAPTER.decode(it),
-                                cacheDir,
-                                config.frameWidth,
-                                config.frameHeight,
-                                memoryCacheKey
-                            ),
-                            callback,
-                            alias
-                        )
-                    }
+        return SvgaCoroutineManager.launchIo {
+            try {
+                val cacheDir = SVGACache.buildCacheDir(cacheKey)
+                File(cacheDir, "movie.binary").takeIf { it.isFile }?.let { binaryFile ->
+                    try {
+                        LogUtils.info(TAG, "binary change to entity")
+                        FileInputStream(binaryFile).use {
+                            LogUtils.info(TAG, "binary change to entity success")
+                            invokeCompleteCallback(
+                                SVGAVideoEntity(
+                                    MovieEntity.ADAPTER.decode(it),
+                                    cacheDir,
+                                    config.frameWidth,
+                                    config.frameHeight,
+                                    memoryCacheKey
+                                ),
+                                callback,
+                                alias
+                            )
+                        }
 
-                } catch (e: Exception) {
-                    LogUtils.error(TAG, "binary change to entity fail", e)
-                    cacheDir.delete()
-                    binaryFile.delete()
-                    throw e
+                    } catch (e: Exception) {
+                        LogUtils.error(TAG, "binary change to entity fail", e)
+                        cacheDir.delete()
+                        binaryFile.delete()
+                        throw e
+                    }
                 }
-            }
-            File(cacheDir, "movie.spec").takeIf { it.isFile }?.let { jsonFile ->
-                try {
-                    LogUtils.info(TAG, "spec change to entity")
-                    FileInputStream(jsonFile).use { fileInputStream ->
-                        ByteArrayOutputStream().use { byteArrayOutputStream ->
-                            val buffer = ByteArray(2048)
-                            while (true) {
-                                val size = fileInputStream.read(buffer, 0, buffer.size)
-                                if (size == -1) {
-                                    break
+                File(cacheDir, "movie.spec").takeIf { it.isFile }?.let { jsonFile ->
+                    try {
+                        LogUtils.info(TAG, "spec change to entity")
+                        FileInputStream(jsonFile).use { fileInputStream ->
+                            ByteArrayOutputStream().use { byteArrayOutputStream ->
+                                val buffer = ByteArray(2048)
+                                while (isActive) {
+                                    val size = fileInputStream.read(buffer, 0, buffer.size)
+                                    if (size == -1) {
+                                        break
+                                    }
+                                    byteArrayOutputStream.write(buffer, 0, size)
                                 }
-                                byteArrayOutputStream.write(buffer, 0, size)
-                            }
-                            byteArrayOutputStream.toString().let {
-                                JSONObject(it).let {
-                                    LogUtils.info(TAG, "spec change to entity success")
-                                    this.invokeCompleteCallback(
-                                        SVGAVideoEntity(
-                                            it,
-                                            cacheDir,
-                                            config.frameWidth,
-                                            config.frameHeight,
-                                            memoryCacheKey
-                                        ),
-                                        callback,
-                                        alias
-                                    )
+                                byteArrayOutputStream.toString().let {
+                                    JSONObject(it).let { json ->
+                                        LogUtils.info(TAG, "spec change to entity success")
+                                        invokeCompleteCallback(
+                                            SVGAVideoEntity(
+                                                json,
+                                                cacheDir,
+                                                config.frameWidth,
+                                                config.frameHeight,
+                                                memoryCacheKey
+                                            ),
+                                            callback,
+                                            alias
+                                        )
+                                    }
                                 }
                             }
                         }
+                    } catch (e: Exception) {
+                        LogUtils.error(TAG, "$alias movie.spec change to entity fail", e)
+                        cacheDir.delete()
+                        jsonFile.delete()
+                        throw e
                     }
-                } catch (e: Exception) {
-                    LogUtils.error(TAG, "$alias movie.spec change to entity fail", e)
-                    cacheDir.delete()
-                    jsonFile.delete()
-                    throw e
                 }
+            } catch (e: Exception) {
+                invokeErrorCallback(e, callback, alias)
             }
-        } catch (e: Exception) {
-            this.invokeErrorCallback(e, callback, alias)
         }
     }
 

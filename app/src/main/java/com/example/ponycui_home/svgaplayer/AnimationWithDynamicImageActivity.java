@@ -5,17 +5,7 @@ import android.graphics.Color;
 import android.os.Bundle;
 import android.support.annotation.Nullable;
 
-import com.opensource.svgaplayer.SVGAConfig;
-import com.opensource.svgaplayer.SVGADrawable;
-import com.opensource.svgaplayer.SVGADynamicEntity;
 import com.opensource.svgaplayer.SVGAImageView;
-import com.opensource.svgaplayer.SVGAParser;
-import com.opensource.svgaplayer.SVGAVideoEntity;
-
-import org.jetbrains.annotations.NotNull;
-
-import java.net.MalformedURLException;
-import java.net.URL;
 
 public class AnimationWithDynamicImageActivity extends Activity {
 
@@ -31,26 +21,15 @@ public class AnimationWithDynamicImageActivity extends Activity {
     }
 
     private void loadAnimation() {
-        try { // new URL needs try catch.
-            SVGAParser parser = SVGAParser.shareParser();
-            parser.decodeFromURL(new URL("https://github.com/yyued/SVGA-Samples/blob/master/kingset.svga?raw=true"),new SVGAConfig(), new SVGAParser.ParseCompletion() {
-                @Override
-                public void onComplete(@NotNull SVGAVideoEntity videoItem) {
-                    SVGADynamicEntity dynamicEntity = new SVGADynamicEntity();
-                    dynamicEntity.setDynamicImage("https://github.com/PonyCui/resources/blob/master/svga_replace_avatar.png?raw=true", "99"); // Here is the KEY implementation.
-                    SVGADrawable drawable = new SVGADrawable(videoItem, dynamicEntity);
-                    animationView.setImageDrawable(drawable);
-                    animationView.startAnimation();
-                }
-
-                @Override
-                public void onError() {
-
-                }
-            }, null);
-        } catch (MalformedURLException e) {
-            e.printStackTrace();
-        }
+        animationView.load("https://github.com/yyued/SVGA-Samples/blob/master/kingset.svga?raw=true",
+                null,
+                null,
+                svgaDynamicEntity -> {
+                    svgaDynamicEntity.setDynamicImage(
+                            "https://github.com/PonyCui/resources/blob/master/svga_replace_avatar.png?raw=true",
+                            "99"); // Here is the KEY implementation.
+                    return null;
+                });
     }
 
 }

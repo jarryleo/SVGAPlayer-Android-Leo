@@ -3,8 +3,6 @@ package com.example.ponycui_home.svgaplayer
 import android.app.Activity
 import android.os.Bundle
 import com.opensource.svgaplayer.SVGAImageView
-import com.opensource.svgaplayer.SVGASoundManager
-import com.opensource.svgaplayer.loadAssets
 
 class SVGAListAssetsActivity : Activity() {
 
@@ -34,7 +32,7 @@ class SVGAListAssetsActivity : Activity() {
         path[8] = "times4.svga"
         path[9] = "times5.svga"
         for (index in 0 until 10) {
-            list[index]?.loadAssets(path[index]?:"")
+            list[index]?.load(path[index])
         }
     }
 

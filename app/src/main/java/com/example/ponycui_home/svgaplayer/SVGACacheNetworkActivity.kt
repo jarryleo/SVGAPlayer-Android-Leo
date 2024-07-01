@@ -3,7 +3,6 @@ package com.example.ponycui_home.svgaplayer
 import android.app.Activity
 import android.os.Bundle
 import com.opensource.svgaplayer.SVGAImageView
-import com.opensource.svgaplayer.loadUrl
 
 class SVGACacheNetworkActivity : Activity() {
 
@@ -27,7 +26,7 @@ class SVGACacheNetworkActivity : Activity() {
         path[8] = "https://res.fancyliveapp.com/headwear/1695095548666?imageslim"
         path[9] = "https://res.fancyliveapp.com/headwear/1695095567925?imageslim"
         for (index in 0 until 3) {
-            list[index]?.loadUrl(path[index] ?: "", useMemoryCache = true, isOriginal = true, loopCount = 0)
+            list[index]?.load(path[index])
         }
 
     }

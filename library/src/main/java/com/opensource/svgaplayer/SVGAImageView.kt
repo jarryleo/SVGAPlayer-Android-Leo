@@ -13,8 +13,10 @@ import android.view.animation.LinearInterpolator
 import android.widget.ImageView
 import com.opensource.svgaplayer.utils.SVGARange
 import com.opensource.svgaplayer.utils.log.LogUtils
+import kotlinx.coroutines.Job
 import java.lang.ref.WeakReference
 import java.net.URL
+import java.net.URLDecoder
 
 /**
  * Created by PonyCui on 2017/3/29.
@@ -57,6 +59,11 @@ open class SVGAImageView @JvmOverloads constructor(
     private var mStartFrame = 0
     private var mEndFrame = 0
 
+    private var lastSource: String? = null
+    private var loadJob: Job? = null
+    private var dynamicBlock: (SVGADynamicEntity.() -> Unit)? = {}
+    private var onError: ((SVGAImageView) -> Unit)? = {}
+
     init {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.JELLY_BEAN_MR2) {
             this.setLayerType(View.LAYER_TYPE_SOFTWARE, null)
@@ -89,30 +96,54 @@ open class SVGAImageView @JvmOverloads constructor(
             }
         }
         typedArray.getString(R.styleable.SVGAImageView_source)?.let {
-            parserSource(it)
+            lastSource = it
         }
         typedArray.recycle()
     }
 
-    private fun parserSource(source: String) {
+    @JvmOverloads
+    fun load(
+        source: String?,
+        config: SVGAConfig? = null,
+        onError: ((SVGAImageView) -> Unit)? = {},
+        dynamicBlock: (SVGADynamicEntity.() -> Unit)? = {}
+    ): SVGAImageView {
+        this.dynamicBlock = dynamicBlock
+        this.onError = onError
+        if (source.isNullOrEmpty()) return this
+        if (isReplayDrawable(source)) {
+            return this
+        }
+        lastSource = source
+        //已有宽高才加载动画
+        if (width > 0 && height > 0) {
+            parserSource(source, config)
+        }
+        return this
+    }
+
+    private fun parserSource(source: String?, config: SVGAConfig? = null) {
+        if (source.isNullOrEmpty()) return
+        //设置动画属性
+        loops = config?.loopCount ?: 0
         val refImgView = WeakReference<SVGAImageView>(this)
         val parser = SVGAParser.shareParser()
         if (source.startsWith("http://") || source.startsWith("https://")) {
             val url = try {
-                URL(source)
+                URL(URLDecoder.decode(source, "UTF-8"))
             } catch (e: Exception) {
                 e.printStackTrace()
                 return
             }
-            parser.decodeFromURL(
+            loadJob = parser.decodeFromURL(
                 url,
-                config = SVGAConfig(),
+                config = config ?: SVGAConfig(width, height),
                 createParseCompletion(refImgView)
             )
         } else {
-            parser.decodeFromAssets(
+            loadJob = parser.decodeFromAssets(
                 source,
-                config = SVGAConfig(),
+                config = config ?: SVGAConfig(width, height),
                 createParseCompletion(refImgView)
             )
         }
@@ -124,14 +155,18 @@ open class SVGAImageView @JvmOverloads constructor(
                 ref.get()?.startAnimation(videoItem)
             }
 
-            override fun onError() {}
+            override fun onError() {
+                ref.get()?.onError
+            }
         }
     }
 
     private fun startAnimation(videoItem: SVGAVideoEntity) {
-        this@SVGAImageView.post {
+        post {
             videoItem.antiAlias = mAntiAlias
-            setVideoItem(videoItem)
+            val dynamicItem = SVGADynamicEntity()
+            dynamicBlock?.let { dynamicItem.it() }
+            setVideoItem(videoItem, dynamicItem)
             getSVGADrawable()?.scaleType = scaleType
             if (mAutoPlay) {
                 startAnimation()
@@ -161,7 +196,7 @@ open class SVGAImageView @JvmOverloads constructor(
         animator.interpolator = LinearInterpolator()
         animator.duration =
             ((mEndFrame - mStartFrame + 1) * (1000 / videoItem.FPS) / generateScale()).toLong()
-        animator.repeatCount = if (loops <= 0) 99999 else loops - 1
+        animator.repeatCount = if (loops <= 0) ValueAnimator.INFINITE else loops - 1
         animator.addUpdateListener(mAnimatorUpdateListener)
         animator.addListener(mAnimatorListener)
         if (reverse) {
@@ -244,6 +279,8 @@ open class SVGAImageView @JvmOverloads constructor(
         getSVGADrawable()?.dynamicItem?.clearDynamicObjects()
         // 清除对 drawable 的引用
         setImageDrawable(null)
+        loadJob?.cancel()
+        loadJob = null
     }
 
     private fun isVisible(): Boolean {
@@ -343,7 +380,7 @@ open class SVGAImageView @JvmOverloads constructor(
 
     override fun onAttachedToWindow() {
         super.onAttachedToWindow()
-        stepToFrame(0, loops == 0 && !clearsAfterDetached)
+        stepToFrame(0, loops <= 0 && !clearsAfterDetached)
     }
 
     override fun onDetachedFromWindow() {
@@ -352,6 +389,27 @@ open class SVGAImageView @JvmOverloads constructor(
         if (clearsAfterDetached) {
             clear()
         }
+    }
+
+    override fun onLayout(changed: Boolean, left: Int, top: Int, right: Int, bottom: Int) {
+        super.onLayout(changed, left, top, right, bottom)
+        if (changed) {
+            parserSource(lastSource ?: "")
+        }
+    }
+
+    /** 判断是否重新播放原有资源，true：重新播放 */
+    private fun isReplayDrawable(source: String): Boolean {
+        //对比上次加载的资源地址
+        if (lastSource != source) return false
+        //获取原有drawable
+        val drawable = drawable as? SVGADrawable ?: return false
+        //存在dynamicItem，因为可能前后两次存在差异，需要重新加载数据
+        if (drawable.dynamicItem != null) return false
+        //动画是否正在执行
+        if (isAnimating) return false
+        startAnimation()
+        return true
     }
 
     private class AnimatorListener(view: SVGAImageView) : Animator.AnimatorListener {

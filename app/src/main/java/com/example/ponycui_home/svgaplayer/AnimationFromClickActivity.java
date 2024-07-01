@@ -7,13 +7,13 @@ import android.support.annotation.Nullable;
 import android.widget.Toast;
 
 import com.opensource.svgaplayer.SVGAClickAreaListener;
-import com.opensource.svgaplayer.SVGADrawable;
 import com.opensource.svgaplayer.SVGADynamicEntity;
 import com.opensource.svgaplayer.SVGAImageView;
-import com.opensource.svgaplayer.SVGAParser;
-import com.opensource.svgaplayer.SVGAVideoEntity;
 
 import org.jetbrains.annotations.NotNull;
+
+import kotlin.Unit;
+import kotlin.jvm.functions.Function1;
 
 
 /**
@@ -31,7 +31,7 @@ public class AnimationFromClickActivity extends Activity {
         animationView.setOnAnimKeyClickListener(new SVGAClickAreaListener() {
             @Override
             public void onClick(@NotNull String clickKey) {
-                Toast.makeText(AnimationFromClickActivity.this,clickKey,Toast.LENGTH_SHORT).show();
+                Toast.makeText(AnimationFromClickActivity.this, clickKey, Toast.LENGTH_SHORT).show();
             }
         });
         animationView.setBackgroundColor(Color.WHITE);
@@ -40,20 +40,12 @@ public class AnimationFromClickActivity extends Activity {
     }
 
     private void loadAnimation() {
-        SVGAParser.Companion.shareParser().decodeFromAssets("MerryChristmas.svga",new SVGAParser.ParseCompletion() {
-            @Override
-            public void onComplete(@NotNull SVGAVideoEntity videoItem) {
-                SVGADynamicEntity dynamicEntity = new SVGADynamicEntity();
-                dynamicEntity.setClickArea("img_10");
-                SVGADrawable drawable = new SVGADrawable(videoItem, dynamicEntity);
-                animationView.setImageDrawable(drawable);
-                animationView.startAnimation();
-            }
-            @Override
-            public void onError() {
-
-            }
-        },null);
+        animationView.load("MerryChristmas.svga", null, null,
+                svgaDynamicEntity -> {
+                    svgaDynamicEntity.setClickArea("img_10");
+                    return null;
+                }
+        );
     }
 
 }
