@@ -91,7 +91,7 @@ internal class SVGACanvasDrawer(
         sprites.forEachIndexed { index, svgaDrawerSprite ->
 
             // Save matte sprite
-            svgaDrawerSprite.imageKey.let {
+            svgaDrawerSprite.imageKey?.let {
                 /// No matte layer included or VERSION Unsopport matte
                 if (!hasMatteLayer || Build.VERSION.SDK_INT < Build.VERSION_CODES.LOLLIPOP) {
                     // Normal sprite
@@ -254,7 +254,7 @@ internal class SVGACanvasDrawer(
     }
 
     private fun drawImage(sprite: SVGADrawerSprite, canvas: Canvas) {
-        val imageKey = sprite.imageKey
+        val imageKey = sprite.imageKey ?: return
         val isHidden = dynamicItem?.dynamicHidden?.get(imageKey) == true
         if (isHidden) {
             return
@@ -662,7 +662,7 @@ internal class SVGACanvasDrawer(
     }
 
     private fun drawDynamic(sprite: SVGADrawerSprite, canvas: Canvas, frameIndex: Int) {
-        val imageKey = sprite.imageKey
+        val imageKey = sprite.imageKey ?: return
         dynamicItem?.dynamicDrawer?.get(imageKey)?.let {
             val frameMatrix = shareFrameMatrix(sprite.frameEntity.transform)
             canvas.save()
