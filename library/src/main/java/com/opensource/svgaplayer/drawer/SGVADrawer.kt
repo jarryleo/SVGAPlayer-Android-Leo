@@ -33,10 +33,9 @@ internal open class SGVADrawer(val videoItem: SVGAVideoEntity) {
                     }
                     return@mapNotNull (spritePool.acquire() ?: SVGADrawerSprite(
                         sprite.matteKey ?: "",
-                        sprite.imageKey,
+                        imageKey,
                         sprite.frames[frameIndex]
-                    )
-                            )
+                    ))
                 }
             }
             return@mapNotNull null
