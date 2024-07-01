@@ -2,6 +2,7 @@ package com.opensource.svgaplayer
 
 import com.opensource.svgaplayer.utils.log.LogUtils
 import java.net.URL
+import java.net.URLDecoder
 
 /**
  * @Author     :Leo
@@ -27,7 +28,7 @@ fun SVGAImageView.loadUrl(
 
     val svgaParser = SVGAParser.shareParser()
     val urlSafe = try {
-        URL(url)
+        URL(URLDecoder.decode(url, "UTF-8"))
     } catch (e: Exception) {
         LogUtils.error("SVGAImageView.loadUrl", e)
         return

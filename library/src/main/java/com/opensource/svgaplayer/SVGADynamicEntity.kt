@@ -9,6 +9,7 @@ import android.text.TextPaint
 import com.opensource.svgaplayer.coroutine.SvgaCoroutineManager
 import java.net.HttpURLConnection
 import java.net.URL
+import java.net.URLDecoder
 
 /**
  * Created by cuiminghui on 2017/3/30.
@@ -41,22 +42,22 @@ class SVGADynamicEntity {
     var isAutoRecycleBitmap = true
 
     fun setHidden(value: Boolean, forKey: String) {
-        this.dynamicHidden.put(forKey, value)
+        this.dynamicHidden[forKey] = value
     }
 
     fun setDynamicImage(bitmap: Bitmap, forKey: String) {
-        this.dynamicImage.put(forKey, bitmap)
+        this.dynamicImage[forKey] = bitmap
     }
 
     fun setDynamicImage(url: String, forKey: String) {
         SvgaCoroutineManager.launchIo {
-            val uri = try {
-                URL(url)
+            val urlSafe = try {
+                URL(URLDecoder.decode(url, "UTF-8"))
             }catch (e: Exception){
                 e.printStackTrace()
                 return@launchIo
             }
-            (uri.openConnection() as? HttpURLConnection)?.let {
+            (urlSafe.openConnection() as? HttpURLConnection)?.let {
                 try {
                     it.connectTimeout = 30 * 1000
                     it.requestMethod = "GET"
@@ -100,27 +101,27 @@ class SVGADynamicEntity {
     }
 
     fun setDynamicDrawer(drawer: (canvas: Canvas, frameIndex: Int) -> Boolean, forKey: String) {
-        this.dynamicDrawer.put(forKey, drawer)
+        this.dynamicDrawer[forKey] = drawer
     }
 
     fun setClickArea(clickKey: List<String>) {
         for (itemKey in clickKey) {
-            dynamicIClickArea.put(itemKey, object : IClickAreaListener {
+            dynamicIClickArea[itemKey] = object : IClickAreaListener {
                 override fun onResponseArea(key: String, x0: Int, y0: Int, x1: Int, y1: Int) {
                     mClickMap.let {
-                        if (it.get(key) == null) {
+                        if (it[key] == null) {
                             it.put(key, intArrayOf(x0, y0, x1, y1))
                         } else {
-                            it.get(key)?.let {
-                                it[0] = x0
-                                it[1] = y0
-                                it[2] = x1
-                                it[3] = y1
+                            it[key]?.let { arr ->
+                                arr[0] = x0
+                                arr[1] = y0
+                                arr[2] = x1
+                                arr[3] = y1
                             }
                         }
                     }
                 }
-            })
+            }
         }
     }
 
@@ -144,7 +145,7 @@ class SVGADynamicEntity {
     }
 
     fun setDynamicDrawerSized(drawer: (canvas: Canvas, frameIndex: Int, width: Int, height: Int) -> Boolean, forKey: String) {
-        this.dynamicDrawerSized.put(forKey, drawer)
+        this.dynamicDrawerSized[forKey] = drawer
     }
 
     fun clearDynamicObjects() {
