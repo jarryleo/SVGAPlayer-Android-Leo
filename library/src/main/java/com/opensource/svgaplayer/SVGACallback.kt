@@ -5,9 +5,10 @@ package com.opensource.svgaplayer
  */
 interface SVGACallback {
 
-    fun onPause()
-    fun onFinished()
-    fun onRepeat()
-    fun onStep(frame: Int, percentage: Double)
+    fun onPause() {}
+    fun onResume() {}
+    fun onFinished() {}
+    fun onRepeat() {}
+    fun onStep(frame: Int, percentage: Double) {}
 
 }

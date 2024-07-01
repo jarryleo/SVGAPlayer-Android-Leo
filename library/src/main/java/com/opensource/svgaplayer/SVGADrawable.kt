@@ -8,7 +8,11 @@ import android.widget.ImageView
 import com.opensource.svgaplayer.cache.SVGAMemoryCache
 import com.opensource.svgaplayer.drawer.SVGACanvasDrawer
 
-class SVGADrawable(val videoItem: SVGAVideoEntity, val dynamicItem: SVGADynamicEntity?) : Drawable() {
+class SVGADrawable(
+    val videoItem: SVGAVideoEntity,
+    val dynamicItem: SVGADynamicEntity?
+) :
+    Drawable() {
 
     var cleared = true
         internal set(value) {
@@ -32,11 +36,11 @@ class SVGADrawable(val videoItem: SVGAVideoEntity, val dynamicItem: SVGADynamicE
 
     private val drawer = SVGACanvasDrawer(videoItem, dynamicItem)
 
-    override fun draw(canvas: Canvas?) {
+    override fun draw(canvas: Canvas) {
         if (cleared) {
             return
         }
-        canvas?.let {
+        canvas.let {
             drawer.drawFrame(it, currentFrame, scaleType)
         }
     }
@@ -45,6 +49,7 @@ class SVGADrawable(val videoItem: SVGAVideoEntity, val dynamicItem: SVGADynamicE
 
     }
 
+    @Deprecated("Deprecated in Java")
     override fun getOpacity(): Int {
         return PixelFormat.TRANSPARENT
     }
@@ -104,5 +109,7 @@ class SVGADrawable(val videoItem: SVGAVideoEntity, val dynamicItem: SVGADynamicE
         videoItem.getMemoryCacheKey()?.apply {
             SVGAMemoryCache.INSTANCE.putData(this, videoItem)
         } ?: videoItem.clear()
+        //清除绘制缓存
+        drawer.clear()
     }
 }

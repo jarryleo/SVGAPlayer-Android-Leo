@@ -20,7 +20,7 @@ object SVGAManager {
         context: Context,
         memoryCacheCount: Int = 8,
         httpCacheSize: Long = (256 * 1024 * 1024).toLong(),
-        logEnabled: Boolean = false,
+        logEnabled: Boolean = BuildConfig.DEBUG,
         loggerProxy: ILogger? = null,
         threadPoolExecutor: ThreadPoolExecutor? = null
     ) {
@@ -46,8 +46,13 @@ object SVGAManager {
         loggerProxy?.let { logger ->
             SVGALogger.injectSVGALoggerImp(logger)
         }
+        //初始化声音管理
+        SVGASoundManager.init()
     }
 
+    /**
+     * 低内存时释放缓存
+     */
     fun onLowMemory() {
         SVGAMemoryCache.INSTANCE.clear()
     }

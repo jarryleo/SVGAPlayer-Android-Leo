@@ -2,6 +2,7 @@ package com.opensource.svgaplayer.cache
 
 import android.content.Context
 import com.opensource.svgaplayer.SVGAParser
+import com.opensource.svgaplayer.coroutine.SvgaCoroutineManager
 import com.opensource.svgaplayer.utils.log.LogUtils
 import java.io.File
 import java.net.URL
@@ -43,7 +44,7 @@ object SVGACache {
             LogUtils.error(TAG, "SVGACache is not init!")
             return
         }
-        SVGAParser.threadPoolExecutor.execute {
+        SvgaCoroutineManager.launchIo {
             clearDir(cacheDir)
             LogUtils.info(TAG, "Clear svga cache done!")
         }

@@ -6,6 +6,7 @@ import android.graphics.Canvas
 import android.text.BoringLayout
 import android.text.StaticLayout
 import android.text.TextPaint
+import com.opensource.svgaplayer.coroutine.SvgaCoroutineManager
 import java.net.HttpURLConnection
 import java.net.URL
 
@@ -36,8 +37,8 @@ class SVGADynamicEntity {
 
     internal var isTextDirty = false
 
-    /** 判断是否由SVGA内部自动释放Bitmap（使用Glide时候如果SVGA内部释放掉Bitmap会造成奔溃） */
-    var isAutoRecycleBitmap = false
+    /** 判断是否由SVGA内部自动释放Bitmap（使用Glide时候如果SVGA内部释放掉Bitmap会造成崩溃） */
+    var isAutoRecycleBitmap = true
 
     fun setHidden(value: Boolean, forKey: String) {
         this.dynamicHidden.put(forKey, value)
@@ -49,10 +50,10 @@ class SVGADynamicEntity {
 
     fun setDynamicImage(url: String, forKey: String) {
         val handler = android.os.Handler()
-        SVGAParser.threadPoolExecutor.execute {
+        SvgaCoroutineManager.launchIo {
             (URL(url).openConnection() as? HttpURLConnection)?.let {
                 try {
-                    it.connectTimeout = 20 * 1000
+                    it.connectTimeout = 30 * 1000
                     it.requestMethod = "GET"
                     it.connect()
                     it.inputStream.use { stream ->
@@ -143,7 +144,9 @@ class SVGADynamicEntity {
         this.isTextDirty = true
         this.dynamicHidden.clear()
         if (isAutoRecycleBitmap) {
-            this.dynamicImage.forEach {
+            this.dynamicImage.filter {
+                !it.value.isRecycled
+            }.forEach {
                 it.value.recycle()
             }
         }

@@ -1,6 +1,20 @@
 package com.opensource.svgaplayer.drawer
 
-import android.graphics.*
+import android.annotation.SuppressLint
+import android.graphics.Bitmap
+import android.graphics.BitmapShader
+import android.graphics.Canvas
+import android.graphics.Color
+import android.graphics.DashPathEffect
+import android.graphics.LinearGradient
+import android.graphics.Matrix
+import android.graphics.Paint
+import android.graphics.Path
+import android.graphics.PorterDuff
+import android.graphics.PorterDuffXfermode
+import android.graphics.Rect
+import android.graphics.RectF
+import android.graphics.Shader
 import android.os.Build
 import android.text.StaticLayout
 import android.text.TextUtils
@@ -9,19 +23,51 @@ import com.opensource.svgaplayer.SVGADynamicEntity
 import com.opensource.svgaplayer.SVGASoundManager
 import com.opensource.svgaplayer.SVGAVideoEntity
 import com.opensource.svgaplayer.entities.SVGAVideoShapeEntity
+import kotlin.math.abs
+import kotlin.math.roundToInt
+import kotlin.math.sqrt
 
 /**
  * Created by cuiminghui on 2017/3/29.
  */
 
-internal class SVGACanvasDrawer(videoItem: SVGAVideoEntity, val dynamicItem: SVGADynamicEntity?) : SGVADrawer(videoItem) {
+internal class SVGACanvasDrawer(
+    videoItem: SVGAVideoEntity, private val dynamicItem: SVGADynamicEntity?
+) : SGVADrawer(videoItem) {
 
     private val sharedValues = ShareValues()
     private val drawTextCache: HashMap<String, Bitmap> = hashMapOf()
+    private val drawTextOffsetCache: HashMap<String, Float> = hashMapOf()
+    private val drawTextRtlCache: HashMap<String, Boolean> = hashMapOf()
+    private val drawTextMarqueeCache: HashMap<String, Boolean> = hashMapOf()
     private val pathCache = PathCache()
 
     private var beginIndexList: Array<Boolean>? = null
     private var endIndexList: Array<Boolean>? = null
+
+    private val marqueeLinearGradientWidth = 20f
+    private val marqueeLeftLinearGradient by lazy {
+        LinearGradient(
+            0f,
+            0f,
+            marqueeLinearGradientWidth,
+            0f,
+            Color.TRANSPARENT,
+            Color.BLACK,
+            Shader.TileMode.CLAMP
+        )
+    }
+    private val marqueeRightLinearGradient by lazy {
+        LinearGradient(
+            0f,
+            0f,
+            marqueeLinearGradientWidth,
+            0f,
+            Color.BLACK,
+            Color.TRANSPARENT,
+            Shader.TileMode.CLAMP
+        )
+    }
 
     override fun drawFrame(canvas: Canvas, frameIndex: Int, scaleType: ImageView.ScaleType) {
         super.drawFrame(canvas, frameIndex, scaleType)
@@ -29,7 +75,7 @@ internal class SVGACanvasDrawer(videoItem: SVGAVideoEntity, val dynamicItem: SVG
         this.pathCache.onSizeChanged(canvas)
         val sprites = requestFrameSprites(frameIndex)
         // Filter null sprites
-        if (sprites.count() <= 0) return
+        if (sprites.isEmpty()) return
         val matteSprites = mutableMapOf<String, SVGADrawerSprite>()
         var saveID = -1
         beginIndexList = null
@@ -37,7 +83,7 @@ internal class SVGACanvasDrawer(videoItem: SVGAVideoEntity, val dynamicItem: SVG
 
         // Filter no matte layer
         var hasMatteLayer = false
-        sprites.get(0).imageKey?.let {
+        sprites.getOrNull(0)?.imageKey?.let {
             if (it.endsWith(".matte")) {
                 hasMatteLayer = true
             }
@@ -55,7 +101,7 @@ internal class SVGACanvasDrawer(videoItem: SVGAVideoEntity, val dynamicItem: SVG
                 }
                 /// Cache matte sprite
                 if (it.endsWith(".matte")) {
-                    matteSprites.put(it, svgaDrawerSprite)
+                    matteSprites[it] = svgaDrawerSprite
                     // Continue
                     return@forEachIndexed
                 }
@@ -63,7 +109,9 @@ internal class SVGACanvasDrawer(videoItem: SVGAVideoEntity, val dynamicItem: SVG
             /// Is matte begin
             if (isMatteBegin(index, sprites)) {
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
-                    saveID = canvas.saveLayer(0f, 0f, canvas.width.toFloat(), canvas.height.toFloat(), null)
+                    saveID = canvas.saveLayer(
+                        0f, 0f, canvas.width.toFloat(), canvas.height.toFloat(), null
+                    )
                 } else {
                     canvas.save()
                 }
@@ -73,9 +121,17 @@ internal class SVGACanvasDrawer(videoItem: SVGAVideoEntity, val dynamicItem: SVG
 
             /// Is matte end
             if (isMatteEnd(index, sprites)) {
-                matteSprites.get(svgaDrawerSprite.matteKey)?.let {
-                    drawSprite(it, this.sharedValues.shareMatteCanvas(canvas.width, canvas.height), frameIndex)
-                    canvas.drawBitmap(this.sharedValues.sharedMatteBitmap(), 0f, 0f, this.sharedValues.shareMattePaint())
+                matteSprites[svgaDrawerSprite.matteKey]?.let {
+                    drawSprite(
+                        it,
+                        this.sharedValues.shareMatteCanvas(canvas.width, canvas.height),
+                        frameIndex
+                    )
+                    this.sharedValues.sharedMatteBitmap()?.let { bitmap ->
+                        canvas.drawBitmap(
+                            bitmap, 0f, 0f, this.sharedValues.shareMattePaint()
+                        )
+                    }
                     if (saveID != -1) {
                         canvas.restoreToCount(saveID)
                     } else {
@@ -101,8 +157,8 @@ internal class SVGACanvasDrawer(videoItem: SVGAVideoEntity, val dynamicItem: SVG
                     }
                 }
                 svgaDrawerSprite.matteKey?.let {
-                    if (it.length > 0) {
-                        sprites.get(index - 1)?.let { lastSprite ->
+                    if (it.isNotEmpty()) {
+                        sprites.getOrNull(index - 1)?.let { lastSprite ->
                             if (lastSprite.matteKey.isNullOrEmpty()) {
                                 boolArray[index] = true
                             } else {
@@ -131,12 +187,12 @@ internal class SVGACanvasDrawer(videoItem: SVGAVideoEntity, val dynamicItem: SVG
                     }
                 }
                 svgaDrawerSprite.matteKey?.let {
-                    if (it.length > 0) {
+                    if (it.isNotEmpty()) {
                         // Last one
                         if (index == sprites.count() - 1) {
                             boolArray[index] = true
                         } else {
-                            sprites.get(index + 1)?.let { nextSprite ->
+                            sprites.getOrNull(index + 1)?.let { nextSprite ->
                                 if (nextSprite.matteKey.isNullOrEmpty()) {
                                     boolArray[index] = true
                                 } else {
@@ -203,9 +259,11 @@ internal class SVGACanvasDrawer(videoItem: SVGAVideoEntity, val dynamicItem: SVG
         if (isHidden) {
             return
         }
-        val bitmapKey = if (imageKey.endsWith(".matte")) imageKey.substring(0, imageKey.length - 6) else imageKey
-        val drawingBitmap = (dynamicItem?.dynamicImage?.get(bitmapKey) ?: videoItem.imageMap[bitmapKey])
-                ?: return
+        val bitmapKey = if (imageKey.endsWith(".matte")) imageKey.substring(
+            0, imageKey.length - 6
+        ) else imageKey
+        val drawingBitmap =
+            (dynamicItem?.dynamicImage?.get(bitmapKey) ?: videoItem.imageMap[bitmapKey]) ?: return
         val frameMatrix = shareFrameMatrix(sprite.frameEntity.transform)
         val paint = this.sharedValues.sharedPaint()
         paint.isAntiAlias = videoItem.antiAlias
@@ -218,32 +276,45 @@ internal class SVGACanvasDrawer(videoItem: SVGAVideoEntity, val dynamicItem: SVG
             maskPath.buildPath(path)
             path.transform(frameMatrix)
             canvas.clipPath(path)
-            frameMatrix.preScale((sprite.frameEntity.layout.width / drawingBitmap.width).toFloat(), (sprite.frameEntity.layout.height / drawingBitmap.height).toFloat())
+            frameMatrix.preScale(
+                (sprite.frameEntity.layout.width / drawingBitmap.width).toFloat(),
+                (sprite.frameEntity.layout.height / drawingBitmap.height).toFloat()
+            )
             if (!drawingBitmap.isRecycled) {
                 canvas.drawBitmap(drawingBitmap, frameMatrix, paint)
             }
             canvas.restore()
         } else {
-            frameMatrix.preScale((sprite.frameEntity.layout.width / drawingBitmap.width).toFloat(), (sprite.frameEntity.layout.height / drawingBitmap.height).toFloat())
+            frameMatrix.preScale(
+                (sprite.frameEntity.layout.width / drawingBitmap.width).toFloat(),
+                (sprite.frameEntity.layout.height / drawingBitmap.height).toFloat()
+            )
             if (!drawingBitmap.isRecycled) {
                 canvas.drawBitmap(drawingBitmap, frameMatrix, paint)
             }
         }
+        val matrixArray = floatArrayOf(0f, 0f, 0f, 0f, 0f, 0f, 0f, 0f, 0f)
+        frameMatrix.getValues(matrixArray)
+        val x0 = matrixArray[2].toInt()
+        val y0 = matrixArray[5].toInt()
+        val x1 = (drawingBitmap.width * matrixArray[0] + matrixArray[2]).toInt()
+        val y1 = (drawingBitmap.height * matrixArray[4] + matrixArray[5]).toInt()
+        val rect = Rect(x0, y0, x1, y1)
         dynamicItem?.dynamicIClickArea.let {
-            it?.get(imageKey)?.let { listener ->
-                val matrixArray = floatArrayOf(0f, 0f, 0f, 0f, 0f, 0f, 0f, 0f, 0f)
-                frameMatrix.getValues(matrixArray)
-                listener.onResponseArea(imageKey, matrixArray[2].toInt()
-                        , matrixArray[5].toInt()
-                        , (drawingBitmap.width * matrixArray[0] + matrixArray[2]).toInt()
-                        , (drawingBitmap.height * matrixArray[4] + matrixArray[5]).toInt())
-            }
+            it?.get(imageKey)?.onResponseArea(imageKey, x0, y0, x1, y1)
         }
-        drawTextOnBitmap(canvas, drawingBitmap, sprite, frameMatrix)
+        drawTextOnBitmap(canvas, drawingBitmap, sprite, frameMatrix, rect)
     }
 
-    private fun drawTextOnBitmap(canvas: Canvas, drawingBitmap: Bitmap, sprite: SVGADrawerSprite, frameMatrix: Matrix) {
-        if (dynamicItem?.isTextDirty==true) {
+    @SuppressLint("DiscouragedPrivateApi")
+    private fun drawTextOnBitmap(
+        canvas: Canvas,
+        drawingBitmap: Bitmap,
+        sprite: SVGADrawerSprite,
+        frameMatrix: Matrix,
+        rect: Rect
+    ) {
+        if (dynamicItem?.isTextDirty == true) {
             this.drawTextCache.clear()
             dynamicItem.isTextDirty = false
         }
@@ -254,16 +325,21 @@ internal class SVGACanvasDrawer(videoItem: SVGAVideoEntity, val dynamicItem: SVG
                 drawTextCache[imageKey]?.let {
                     textBitmap = it
                 } ?: kotlin.run {
-                    textBitmap = Bitmap.createBitmap(drawingBitmap.width, drawingBitmap.height, Bitmap.Config.ARGB_8888)
+                    val bitmap = Bitmap.createBitmap(
+                        drawingBitmap.width, drawingBitmap.height, Bitmap.Config.ARGB_8888
+                    )
+                    textBitmap = bitmap
                     val drawRect = Rect(0, 0, drawingBitmap.width, drawingBitmap.height)
-                    val textCanvas = Canvas(textBitmap)
+                    val textCanvas = Canvas(bitmap)
                     drawingTextPaint.isAntiAlias = true
-                    val fontMetrics = drawingTextPaint.getFontMetrics();
+                    val fontMetrics = drawingTextPaint.fontMetrics
                     val top = fontMetrics.top
                     val bottom = fontMetrics.bottom
                     val baseLineY = drawRect.centerY() - top / 2 - bottom / 2
-                    textCanvas.drawText(drawingText, drawRect.centerX().toFloat(), baseLineY, drawingTextPaint);
-                    drawTextCache.put(imageKey, textBitmap as Bitmap)
+                    textCanvas.drawText(
+                        drawingText, drawRect.centerX().toFloat(), baseLineY, drawingTextPaint
+                    )
+                    drawTextCache.put(imageKey, bitmap)
                 }
             }
         }
@@ -273,12 +349,14 @@ internal class SVGACanvasDrawer(videoItem: SVGAVideoEntity, val dynamicItem: SVG
                 textBitmap = it
             } ?: kotlin.run {
                 it.paint.isAntiAlias = true
-
-                textBitmap = Bitmap.createBitmap(drawingBitmap.width, drawingBitmap.height, Bitmap.Config.ARGB_8888)
-                val textCanvas = Canvas(textBitmap)
+                val bitmap = Bitmap.createBitmap(
+                    drawingBitmap.width, drawingBitmap.height, Bitmap.Config.ARGB_8888
+                )
+                textBitmap = bitmap
+                val textCanvas = Canvas(bitmap)
                 textCanvas.translate(0f, ((drawingBitmap.height - it.height) / 2).toFloat())
                 it.draw(textCanvas)
-                drawTextCache.put(imageKey, textBitmap as Bitmap)
+                drawTextCache.put(imageKey, bitmap)
             }
         }
 
@@ -287,31 +365,53 @@ internal class SVGACanvasDrawer(videoItem: SVGAVideoEntity, val dynamicItem: SVG
                 textBitmap = it
             } ?: kotlin.run {
                 it.paint.isAntiAlias = true
-                var layout = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                    var lineMax = try {
-                        val field = StaticLayout::class.java.getDeclaredField("mMaximumVisibleLineCount")
-                        field.isAccessible = true
-                        field.getInt(it)
-                    } catch (e: Exception) {
-                        Int.MAX_VALUE
-                    }
-                    StaticLayout.Builder
-                            .obtain(it.text, 0, it.text.length, it.paint, drawingBitmap.width)
-                            .setAlignment(it.alignment)
-                            .setMaxLines(lineMax)
-                            .setEllipsize(TextUtils.TruncateAt.END)
-                            .build()
-                } else {
-                    StaticLayout(it.text, 0, it.text.length, it.paint, drawingBitmap.width, it.alignment, it.spacingMultiplier, it.spacingAdd, false)
+                val lineMax = try {
+                    val field =
+                        StaticLayout::class.java.getDeclaredField("mMaximumVisibleLineCount")
+                    field.isAccessible = true
+                    field.getInt(it)
+                } catch (e: Exception) {
+                    Int.MAX_VALUE
                 }
-                textBitmap = Bitmap.createBitmap(drawingBitmap.width, drawingBitmap.height, Bitmap.Config.ARGB_8888)
-                val textCanvas = Canvas(textBitmap)
-                textCanvas.translate(0f, ((drawingBitmap.height - layout.height) / 2).toFloat())
+                //是否是跑马灯文本，是的话文本 bitmap 宽度为 textWidth，否则为 drawingBitmap 宽度
+                val textWidth = it.paint.measureText(it.text, 0, it.text.length).roundToInt()
+                val isMarquee =
+                    (lineMax == 1 && textWidth > drawingBitmap.width && it.width != Int.MAX_VALUE)
+                drawTextMarqueeCache[imageKey] = isMarquee
+                val targetWidth = if (isMarquee) textWidth else drawingBitmap.width
+                val layout = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                    StaticLayout.Builder.obtain(it.text, 0, it.text.length, it.paint, targetWidth)
+                        .setAlignment(it.alignment).setMaxLines(lineMax)
+                        .setEllipsize(TextUtils.TruncateAt.END).build()
+                } else {
+                    StaticLayout(
+                        it.text,
+                        0,
+                        it.text.length,
+                        it.paint,
+                        targetWidth,
+                        it.alignment,
+                        it.spacingMultiplier,
+                        it.spacingAdd,
+                        false
+                    )
+                }
+
+                drawTextRtlCache[imageKey] = layout.text.indices.any { layout.isRtlCharAt(it) }
+                val bitmap = Bitmap.createBitmap(
+                    targetWidth, drawingBitmap.height, Bitmap.Config.ARGB_8888
+                )
+                textBitmap = bitmap
+                val textCanvas = Canvas(bitmap)
+                val scale = drawingBitmap.height / layout.height.toFloat()
+                //textCanvas.translate(0f, ((drawingBitmap.height - layout.height) / 2).toFloat())
+                textCanvas.scale(1f, scale)
                 layout.draw(textCanvas)
-                drawTextCache.put(imageKey, textBitmap as Bitmap)
+                drawTextCache[imageKey] = bitmap
+
             }
         }
-        textBitmap?.let { textBitmap ->
+        textBitmap?.let { bitmap ->
             val paint = this.sharedValues.sharedPaint()
             paint.isAntiAlias = videoItem.antiAlias
             paint.alpha = (sprite.frameEntity.alpha * 255).toInt()
@@ -320,18 +420,116 @@ internal class SVGACanvasDrawer(videoItem: SVGAVideoEntity, val dynamicItem: SVG
                 canvas.save()
                 canvas.concat(frameMatrix)
                 canvas.clipRect(0, 0, drawingBitmap.width, drawingBitmap.height)
-                val bitmapShader = BitmapShader(textBitmap, Shader.TileMode.REPEAT, Shader.TileMode.REPEAT)
+                val bitmapShader =
+                    BitmapShader(bitmap, Shader.TileMode.REPEAT, Shader.TileMode.REPEAT)
                 paint.shader = bitmapShader
                 val path = this.sharedValues.sharedPath()
                 maskPath.buildPath(path)
                 canvas.drawPath(path, paint)
                 canvas.restore()
             } else {
-                paint.isFilterBitmap = videoItem.antiAlias
-                canvas.drawBitmap(textBitmap, frameMatrix, paint)
+                val isMarquee = drawTextMarqueeCache[imageKey] ?: false
+                if (isMarquee) {
+                    drawMarquee(imageKey, rect, canvas, bitmap, paint)
+                } else {
+                    paint.isFilterBitmap = videoItem.antiAlias
+                    canvas.drawBitmap(bitmap, frameMatrix, paint)
+                }
             }
         }
     }
+
+    /**
+     * 绘制跑马灯
+     */
+    private fun drawMarquee(
+        imageKey: String, rect: Rect, canvas: Canvas, bitmap: Bitmap, paint: Paint
+    ) {
+        val layer = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+            canvas.saveLayer(RectF(rect), paint)
+        } else {
+            canvas.save()
+        }
+        val isRtl = drawTextRtlCache[imageKey] ?: false
+        val fps = videoItem.FPS
+        //每秒偏移30像素，计算每帧需要偏移多少像素
+        val speed = maxOf(30f / fps, 1f)
+        val defOffset = -speed * fps //停顿1秒
+        //每帧偏移量，目前svga动画每秒 15帧，每帧偏移 1px， -15 表示停顿1秒
+        var offsetX = drawTextOffsetCache[imageKey] ?: defOffset
+        offsetX += 2f
+        //截取文字的起始点，如果是rtl，从右侧开始
+        val srcStart = if (isRtl) {
+            minOf(bitmap.width.toFloat(), bitmap.width - offsetX).roundToInt()
+        } else {
+            maxOf(0f, offsetX).roundToInt()
+        }
+        //需要截取的宽度
+        val srcWidth = if (isRtl) minOf(rect.width(), srcStart)
+        else minOf(rect.width(), bitmap.width - srcStart)
+        val srcEnd = if (isRtl) srcStart - srcWidth else srcStart + srcWidth
+        //绘制原始文本 还未显示到结尾就是全部文本
+        if (srcWidth > 0) {
+            val srcRect = Rect(
+                if (isRtl) srcEnd else srcStart,
+                0,
+                if (isRtl) srcStart else srcEnd,
+                bitmap.height
+            )
+            val destRect = Rect(
+                if (isRtl) rect.right - srcWidth else rect.left,
+                rect.top,
+                if (isRtl) rect.right else rect.left + srcWidth,
+                rect.bottom
+            )
+            canvas.drawBitmap(bitmap, srcRect, destRect, paint)
+        }
+        val leftSpace = rect.width() - srcWidth //剩余空间
+        //绘制首位相接部分的下一段首部文本
+        val spaceWidth =
+            minOf(rect.width() / 3, (marqueeLinearGradientWidth * 2).roundToInt()) // 首位相接中间空余
+        val lastWidth = minOf(leftSpace - spaceWidth, rect.width()) //右侧需要绘制的文本宽度
+        if (leftSpace > spaceWidth) { //如果右边空余超过一半，绘制右边文本
+            val srcRect =
+                Rect(
+                    if (isRtl) bitmap.width - lastWidth else 0,
+                    0,
+                    if (isRtl) bitmap.width else lastWidth,
+                    bitmap.height
+                )
+            val dstRect =
+                Rect(
+                    if (isRtl) rect.left else rect.left + rect.width() - lastWidth,
+                    rect.top,
+                    if (isRtl) rect.left + lastWidth else rect.right,
+                    rect.bottom
+                )
+            canvas.drawBitmap(bitmap, srcRect, dstRect, paint)
+        }
+        if (lastWidth >= rect.width()) {
+            offsetX = defOffset
+        }
+        drawTextOffsetCache[imageKey] = offsetX
+        //宽度太小，不绘制阴影部分
+        val isDrawLinearGradient = rect.width() > marqueeLinearGradientWidth * 2
+        val isWait = offsetX < 0
+        if (isDrawLinearGradient) {
+            paint.xfermode = PorterDuffXfermode(PorterDuff.Mode.DST_IN)
+            if (!isWait || isRtl) {
+                paint.shader = marqueeLeftLinearGradient
+                canvas.translate(rect.left.toFloat(), rect.top.toFloat())
+                canvas.drawRect(0f, 0f, marqueeLinearGradientWidth, rect.height().toFloat(), paint)
+            }
+            if (!isWait || !isRtl) {
+                paint.shader = marqueeRightLinearGradient
+                canvas.translate(rect.width() - marqueeLinearGradientWidth, 0f)
+                canvas.drawRect(0f, 0f, marqueeLinearGradientWidth, rect.height().toFloat(), paint)
+            }
+            paint.shader = null
+        }
+        canvas.restoreToCount(layer)
+    }
+
 
     private fun drawShape(sprite: SVGADrawerSprite, canvas: Canvas) {
         val frameMatrix = shareFrameMatrix(sprite.frameEntity.transform)
@@ -356,7 +554,8 @@ internal class SVGACanvasDrawer(videoItem: SVGAVideoEntity, val dynamicItem: SVG
                     if (it != 0x00000000) {
                         paint.style = Paint.Style.FILL
                         paint.color = it
-                        val alpha = Math.min(255, Math.max(0, (sprite.frameEntity.alpha * 255).toInt()))
+                        val alpha =
+                            255.coerceAtMost(0.coerceAtLeast((sprite.frameEntity.alpha * 255).toInt()))
                         if (alpha != 255) {
                             paint.alpha = alpha
                         }
@@ -371,44 +570,51 @@ internal class SVGACanvasDrawer(videoItem: SVGAVideoEntity, val dynamicItem: SVG
                         if (sprite.frameEntity.maskPath !== null) canvas.restore()
                     }
                 }
-                shape.styles?.strokeWidth?.let {
-                    if (it > 0) {
+                shape.styles?.strokeWidth?.let { strokeWidth ->
+                    if (strokeWidth > 0) {
                         paint.alpha = (sprite.frameEntity.alpha * 255).toInt()
                         paint.style = Paint.Style.STROKE
                         shape.styles?.stroke?.let {
                             paint.color = it
-                            val alpha = Math.min(255, Math.max(0, (sprite.frameEntity.alpha * 255).toInt()))
+                            val alpha = 255.coerceAtMost(
+                                0.coerceAtLeast((sprite.frameEntity.alpha * 255).toInt())
+                            )
                             if (alpha != 255) {
                                 paint.alpha = alpha
                             }
                         }
                         val scale = matrixScale(frameMatrix)
-                        shape.styles?.strokeWidth?.let {
-                            paint.strokeWidth = it * scale
-                        }
-                        shape.styles?.lineCap?.let {
+                        paint.strokeWidth = strokeWidth * scale
+                        shape.styles?.lineCap?.let { lineCap ->
                             when {
-                                it.equals("butt", true) -> paint.strokeCap = Paint.Cap.BUTT
-                                it.equals("round", true) -> paint.strokeCap = Paint.Cap.ROUND
-                                it.equals("square", true) -> paint.strokeCap = Paint.Cap.SQUARE
+                                lineCap.equals("butt", true) -> paint.strokeCap = Paint.Cap.BUTT
+                                lineCap.equals("round", true) -> paint.strokeCap = Paint.Cap.ROUND
+                                lineCap.equals("square", true) -> paint.strokeCap = Paint.Cap.SQUARE
                             }
                         }
-                        shape.styles?.lineJoin?.let {
+                        shape.styles?.lineJoin?.let { lineJoin ->
                             when {
-                                it.equals("miter", true) -> paint.strokeJoin = Paint.Join.MITER
-                                it.equals("round", true) -> paint.strokeJoin = Paint.Join.ROUND
-                                it.equals("bevel", true) -> paint.strokeJoin = Paint.Join.BEVEL
+                                lineJoin.equals("miter", true) -> paint.strokeJoin =
+                                    Paint.Join.MITER
+
+                                lineJoin.equals("round", true) -> paint.strokeJoin =
+                                    Paint.Join.ROUND
+
+                                lineJoin.equals("bevel", true) -> paint.strokeJoin =
+                                    Paint.Join.BEVEL
                             }
                         }
-                        shape.styles?.miterLimit?.let {
-                            paint.strokeMiter = it.toFloat() * scale
+                        shape.styles?.miterLimit?.let { miterLimit ->
+                            paint.strokeMiter = miterLimit.toFloat() * scale
                         }
-                        shape.styles?.lineDash?.let {
-                            if (it.size == 3 && (it[0] > 0 || it[1] > 0)) {
-                                paint.pathEffect = DashPathEffect(floatArrayOf(
-                                        (if (it[0] < 1.0f) 1.0f else it[0]) * scale,
-                                        (if (it[1] < 0.1f) 0.1f else it[1]) * scale
-                                ), it[2] * scale)
+                        shape.styles?.lineDash?.let { lineDash ->
+                            if (lineDash.size == 3 && (lineDash[0] > 0 || lineDash[1] > 0)) {
+                                paint.pathEffect = DashPathEffect(
+                                    floatArrayOf(
+                                        (if (lineDash[0] < 1.0f) 1.0f else lineDash[0]) * scale,
+                                        (if (lineDash[1] < 0.1f) 0.1f else lineDash[1]) * scale
+                                    ), lineDash[2] * scale
+                                )
                             }
                         }
                         if (sprite.frameEntity.maskPath !== null) canvas.save()
@@ -439,20 +645,20 @@ internal class SVGACanvasDrawer(videoItem: SVGAVideoEntity, val dynamicItem: SVG
         var C = matrixScaleTempValues[1].toDouble()
         var D = matrixScaleTempValues[4].toDouble()
         if (A * D == B * C) return 0f
-        var scaleX = Math.sqrt(A * A + B * B)
+        var scaleX = sqrt(A * A + B * B)
         A /= scaleX
         B /= scaleX
         var skew = A * C + B * D
         C -= A * skew
         D -= B * skew
-        var scaleY = Math.sqrt(C * C + D * D)
+        val scaleY = sqrt(C * C + D * D)
         C /= scaleY
         D /= scaleY
         skew /= scaleY
         if (A * D < B * C) {
             scaleX = -scaleX
         }
-        return if (scaleInfo.ratioX) Math.abs(scaleX.toFloat()) else Math.abs(scaleY.toFloat())
+        return if (scaleInfo.ratioX) abs(scaleX.toFloat()) else abs(scaleY.toFloat())
     }
 
     private fun drawDynamic(sprite: SVGADrawerSprite, canvas: Canvas, frameIndex: Int) {
@@ -468,9 +674,23 @@ internal class SVGACanvasDrawer(videoItem: SVGAVideoEntity, val dynamicItem: SVG
             val frameMatrix = shareFrameMatrix(sprite.frameEntity.transform)
             canvas.save()
             canvas.concat(frameMatrix)
-            it.invoke(canvas, frameIndex, sprite.frameEntity.layout.width.toInt(), sprite.frameEntity.layout.height.toInt())
+            it.invoke(
+                canvas,
+                frameIndex,
+                sprite.frameEntity.layout.width.toInt(),
+                sprite.frameEntity.layout.height.toInt()
+            )
             canvas.restore()
         }
+    }
+
+    fun clear() {
+        drawTextCache.values.filter {
+            !it.isRecycled
+        }.forEach {
+            it.recycle()
+        }
+        drawTextCache.clear()
     }
 
     class ShareValues {
@@ -515,8 +735,8 @@ internal class SVGACanvasDrawer(videoItem: SVGAVideoEntity, val dynamicItem: SVG
             return shareMattePaint
         }
 
-        fun sharedMatteBitmap(): Bitmap {
-            return sharedMatteBitmap as Bitmap
+        fun sharedMatteBitmap(): Bitmap? {
+            return sharedMatteBitmap
         }
 
         fun shareMatteCanvas(width: Int, height: Int): Canvas {
@@ -527,7 +747,9 @@ internal class SVGACanvasDrawer(videoItem: SVGAVideoEntity, val dynamicItem: SVG
 //            val matteCanvas = shareMatteCanvas as Canvas
 //            matteCanvas.drawColor(Color.TRANSPARENT, PorterDuff.Mode.CLEAR)
 //            return matteCanvas
-            return Canvas(sharedMatteBitmap)
+            val bitmap =
+                sharedMatteBitmap ?: Bitmap.createBitmap(width, height, Bitmap.Config.ALPHA_8)
+            return Canvas(bitmap)
         }
     }
 
@@ -548,10 +770,10 @@ internal class SVGACanvasDrawer(videoItem: SVGAVideoEntity, val dynamicItem: SVG
         fun buildPath(shape: SVGAVideoShapeEntity): Path {
             if (!this.cache.containsKey(shape)) {
                 val path = Path()
-                path.set(shape.shapePath)
+                shape.shapePath?.let { path.set(it) }
                 this.cache[shape] = path
             }
-            return this.cache[shape]!!
+            return this.cache[shape] ?: Path()
         }
 
     }

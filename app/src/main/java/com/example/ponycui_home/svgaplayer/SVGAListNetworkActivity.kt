@@ -2,21 +2,16 @@ package com.example.ponycui_home.svgaplayer
 
 import android.app.Activity
 import android.os.Bundle
-import android.util.Log
-import com.opensource.svgaplayer.SVGAConfig
 import com.opensource.svgaplayer.SVGAImageView
-import com.opensource.svgaplayer.SVGAParser.Companion.shareParser
-import com.opensource.svgaplayer.SVGAParser.ParseCompletion
 import com.opensource.svgaplayer.SVGASoundManager
-import com.opensource.svgaplayer.SVGAVideoEntity
-import java.net.URL
+import com.opensource.svgaplayer.loadUrl
 
 class SVGAListNetworkActivity : Activity() {
 
     private val list = arrayOfNulls<SVGAImageView>(10)
     private val path = arrayOfNulls<String>(10)
 
-//    金币榜第1
+    //    金币榜第1
 //https://res.fancyliveapp.com/headwear/1694771685260?imageslim
 //金币榜第2
 //https://res.fancyliveapp.com/headwear/1695095126632?imageslim
@@ -61,26 +56,8 @@ class SVGAListNetworkActivity : Activity() {
         path[7] = "https://res.fancyliveapp.com/headwear/1695095462029?imageslim"
         path[8] = "https://res.fancyliveapp.com/headwear/1695095548666?imageslim"
         path[9] = "https://res.fancyliveapp.com/headwear/1695095567925?imageslim"
-        SVGASoundManager.init()
         for (index in 0 until 10) {
-            list[index].loadAssets(path[index])
+            list[index]?.loadUrl(path[index] ?: "")
         }
     }
-
-    private fun SVGAImageView?.loadAssets(path: String?) {
-        if (this == null || path.isNullOrEmpty()) {
-            return
-        }
-        val svgaParser = shareParser()
-        svgaParser.decodeFromURL(URL(path), config = SVGAConfig(frameWidth = 100, frameHeight = 100), object : ParseCompletion {
-            override fun onComplete(videoItem: SVGAVideoEntity) {
-                setVideoItem(videoItem)
-                startAnimation()
-            }
-
-            override fun onError() {
-            }
-        }, null)
-    }
-
 }

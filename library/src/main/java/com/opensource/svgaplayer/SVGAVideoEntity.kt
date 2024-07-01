@@ -19,8 +19,6 @@ import org.json.JSONObject
 import java.io.File
 import java.io.FileInputStream
 import java.io.FileOutputStream
-import java.util.*
-import kotlin.collections.ArrayList
 
 /**
  * Created by PonyCui on 16/6/18.
@@ -57,7 +55,13 @@ class SVGAVideoEntity {
 
     constructor(json: JSONObject, cacheDir: File) : this(json, cacheDir, 0, 0, null)
 
-    constructor(json: JSONObject, cacheDir: File, frameWidth: Int, frameHeight: Int, memoryCacheKey: String?) {
+    constructor(
+        json: JSONObject,
+        cacheDir: File,
+        frameWidth: Int,
+        frameHeight: Int,
+        memoryCacheKey: String?
+    ) {
         mFrameWidth = frameWidth
         mFrameHeight = frameHeight
         mCacheDir = cacheDir
@@ -86,7 +90,13 @@ class SVGAVideoEntity {
 
     constructor(entity: MovieEntity, cacheDir: File) : this(entity, cacheDir, 0, 0, null)
 
-    constructor(entity: MovieEntity, cacheDir: File, frameWidth: Int, frameHeight: Int, memoryCacheKey: String?) {
+    constructor(
+        entity: MovieEntity,
+        cacheDir: File,
+        frameWidth: Int,
+        frameHeight: Int,
+        memoryCacheKey: String?
+    ) {
         this.mFrameWidth = frameWidth
         this.mFrameHeight = frameHeight
         this.mCacheDir = cacheDir
@@ -167,13 +177,15 @@ class SVGAVideoEntity {
             }
             val filePath = generateBitmapFilePath(entry.value.utf8(), entry.key)
             createBitmap(byteArray, filePath)?.let { bitmap ->
+                LogUtils.info(TAG, "createBitmap key = ${entry.key}")
                 imageMap[entry.key] = bitmap
             }
         }
     }
 
     private fun createBitmap(byteArray: ByteArray, filePath: String): Bitmap? {
-        val bitmap = SVGABitmapByteArrayDecoder.decodeBitmapFrom(byteArray, mFrameWidth, mFrameHeight)
+        val bitmap =
+            SVGABitmapByteArrayDecoder.decodeBitmapFrom(byteArray, mFrameWidth, mFrameHeight)
         return bitmap ?: createBitmap(filePath)
     }
 
@@ -213,7 +225,10 @@ class SVGAVideoEntity {
         }
     }
 
-    private fun createSvgaAudioEntity(audio: AudioEntity, audiosFileMap: HashMap<String, File>): SVGAAudioEntity {
+    private fun createSvgaAudioEntity(
+        audio: AudioEntity,
+        audiosFileMap: HashMap<String, File>
+    ): SVGAAudioEntity {
         val item = SVGAAudioEntity(audio)
         val startTime = (audio.startTime ?: 0).toDouble()
         val totalTime = (audio.totalTime ?: 0).toDouble()
@@ -349,7 +364,9 @@ class SVGAVideoEntity {
         soundPool = null
         audioList = emptyList()
         spriteList = emptyList()
-        imageMap.forEach {
+        imageMap.filter {
+            !it.value.isRecycled
+        }.forEach {
             it.value.recycle()
         }
         imageMap.clear()

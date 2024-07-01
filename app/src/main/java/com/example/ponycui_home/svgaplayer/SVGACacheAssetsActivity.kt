@@ -31,7 +31,6 @@ class SVGACacheAssetsActivity : Activity() {
         path[7] = "times3.svga"
         path[8] = "times4.svga"
         path[9] = "times5.svga"
-        SVGASoundManager.init()
         for (index in 0 until 3) {
 //            list[index].loadAssets(path[(System.currentTimeMillis().toInt()%10)])
             list[index].loadAssets(path[index])

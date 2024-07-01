@@ -2,13 +2,8 @@ package com.example.ponycui_home.svgaplayer
 
 import android.app.Activity
 import android.os.Bundle
-import com.opensource.svgaplayer.SVGAConfig
 import com.opensource.svgaplayer.SVGAImageView
-import com.opensource.svgaplayer.SVGAParser.Companion.shareParser
-import com.opensource.svgaplayer.SVGAParser.ParseCompletion
-import com.opensource.svgaplayer.SVGASoundManager
-import com.opensource.svgaplayer.SVGAVideoEntity
-import java.net.URL
+import com.opensource.svgaplayer.loadUrl
 
 class SVGACacheNetworkActivity : Activity() {
 
@@ -31,28 +26,10 @@ class SVGACacheNetworkActivity : Activity() {
         path[7] = "https://res.fancyliveapp.com/headwear/1695095462029?imageslim"
         path[8] = "https://res.fancyliveapp.com/headwear/1695095548666?imageslim"
         path[9] = "https://res.fancyliveapp.com/headwear/1695095567925?imageslim"
-        SVGASoundManager.init()
         for (index in 0 until 3) {
-//            list[index].loadAssets(path[(System.currentTimeMillis().toInt()%10)])
-            list[index].loadAssets(path[index])
+            list[index]?.loadUrl(path[index] ?: "", useMemoryCache = true, isOriginal = true, loopCount = 0)
         }
-//        list[2].loadAssets(path[(System.currentTimeMillis().toInt()%10)])
-    }
 
-    private fun SVGAImageView?.loadAssets(path: String?) {
-        if (this == null || path.isNullOrEmpty()) {
-            return
-        }
-        val svgaParser = shareParser()
-        svgaParser.decodeFromURL(URL(path), config = SVGAConfig(frameWidth = 100, frameHeight = 100, isCacheToMemory = true), object : ParseCompletion {
-            override fun onComplete(videoItem: SVGAVideoEntity) {
-                setVideoItem(videoItem)
-                startAnimation()
-            }
-
-            override fun onError() {
-            }
-        }, null)
     }
 
 }

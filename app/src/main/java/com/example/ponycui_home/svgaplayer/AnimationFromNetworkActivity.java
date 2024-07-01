@@ -4,17 +4,9 @@ import android.app.Activity;
 import android.graphics.Color;
 import android.os.Bundle;
 import android.support.annotation.Nullable;
-import android.util.Log;
 
-import com.opensource.svgaplayer.SVGAConfig;
 import com.opensource.svgaplayer.SVGAImageView;
-import com.opensource.svgaplayer.SVGAParser;
-import com.opensource.svgaplayer.SVGAVideoEntity;
-
-import org.jetbrains.annotations.NotNull;
-
-import java.net.MalformedURLException;
-import java.net.URL;
+import com.opensource.svgaplayer.SVGAImageViewExtKt;
 
 public class AnimationFromNetworkActivity extends Activity {
 
@@ -28,38 +20,10 @@ public class AnimationFromNetworkActivity extends Activity {
         setContentView(animationView);
         loadAnimation();
     }
-//https://github.com/jarryleo/SVGAPlayer-Android-Leo/raw/master/app/src/main/assets/big2.svga
+
     private void loadAnimation() {
-        try { // new URL needs try catch.
-            SVGAParser svgaParser = SVGAParser.shareParser();
-            String url = "https://github.com/yyued/SVGA-Samples/blob/master/posche.svga?raw=true";
-            String testBigUrl = "https://github.com/jarryleo/SVGAPlayer-Android-Leo/raw/master/app/src/main/assets/big2.svga";
-            svgaParser.decodeFromURL(
-                    new URL(testBigUrl),
-                    new SVGAConfig(
-                            animationView.getWidth(),
-                            animationView.getHeight(),
-                            true
-                    ),
-                    new SVGAParser.ParseCompletion() {
-                        @Override
-                        public void onComplete(@NotNull SVGAVideoEntity videoItem) {
-                            Log.d("##", "## FromNetworkActivity load onComplete");
-                            animationView.setVideoItem(videoItem);
-                            animationView.startAnimation();
-                        }
-
-                        @Override
-                        public void onError() {
-
-                        }
-
-
-                    },
-                    null);
-        } catch (MalformedURLException e) {
-            e.printStackTrace();
-        }
+        String url = "https://github.com/yyued/SVGA-Samples/blob/master/posche.svga?raw=true";
+        SVGAImageViewExtKt.loadUrl(animationView, url);
     }
 
 }
