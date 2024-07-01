@@ -144,7 +144,9 @@ class SVGADynamicEntity {
         this.isTextDirty = true
         this.dynamicHidden.clear()
         if (isAutoRecycleBitmap) {
-            this.dynamicImage.forEach {
+            this.dynamicImage.filter {
+                !it.value.isRecycled
+            }.forEach {
                 it.value.recycle()
             }
         }

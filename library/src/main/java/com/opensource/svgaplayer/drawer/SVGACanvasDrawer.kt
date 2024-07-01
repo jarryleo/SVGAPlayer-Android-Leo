@@ -445,7 +445,11 @@ internal class SVGACanvasDrawer(
     private fun drawMarquee(
         imageKey: String, rect: Rect, canvas: Canvas, bitmap: Bitmap, paint: Paint
     ) {
-        val layer = canvas.saveLayer(RectF(rect), paint)
+        val layer = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+            canvas.saveLayer(RectF(rect), paint)
+        } else {
+            canvas.save()
+        }
         val isRtl = drawTextRtlCache[imageKey] ?: false
         val fps = videoItem.FPS
         //每秒偏移30像素，计算每帧需要偏移多少像素
@@ -681,7 +685,9 @@ internal class SVGACanvasDrawer(
     }
 
     fun clear() {
-        drawTextCache.values.forEach {
+        drawTextCache.values.filter {
+            !it.isRecycled
+        }.forEach {
             it.recycle()
         }
         drawTextCache.clear()
