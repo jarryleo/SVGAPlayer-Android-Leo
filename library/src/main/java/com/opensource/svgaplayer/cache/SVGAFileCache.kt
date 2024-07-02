@@ -1,7 +1,6 @@
 package com.opensource.svgaplayer.cache
 
 import android.content.Context
-import com.opensource.svgaplayer.SVGAParser
 import com.opensource.svgaplayer.coroutine.SvgaCoroutineManager
 import com.opensource.svgaplayer.utils.log.LogUtils
 import java.io.File
@@ -11,7 +10,7 @@ import java.security.MessageDigest
 /**
  * SVGA 缓存管理（文件缓存）
  */
-object SVGACache {
+object SVGAFileCache {
     enum class Type {
         ZIP,
         FILE
@@ -30,7 +29,7 @@ object SVGACache {
         }
 
 
-    fun init(context: Context) {
+    internal fun init(context: Context) {
         if (isInitialized()) return
         cacheDir = "${context.cacheDir.absolutePath}/svga/"
         File(cacheDir).takeIf { !it.exists() }?.mkdirs()
@@ -39,7 +38,7 @@ object SVGACache {
     /**
      * 清理缓存
      */
-    fun clearCache() {
+    internal fun clearCache() {
         if (!isInitialized()) {
             LogUtils.error(TAG, "SVGACache is not init!")
             return
@@ -70,20 +69,20 @@ object SVGACache {
         }
     }
 
-    fun isInitialized(): Boolean {
+    private fun isInitialized(): Boolean {
         return "/" != cacheDir && File(cacheDir).exists()
     }
 
     /**
      * 判断缓存是否存在，存在则返回缓存类型
      */
-    fun getCachedType(cacheKey: String): Type? {
+    internal fun getCachedType(cacheKey: String): Type? {
+        if (buildCacheFile(cacheKey).exists()) return Type.FILE
         if (buildCacheDir(cacheKey).exists()) return Type.ZIP
-        if (buildSvgaFile(cacheKey).exists()) return Type.FILE
         return null
     }
 
-    fun buildCacheKey(str: String): String {
+    internal fun buildCacheKey(str: String): String {
         val messageDigest = MessageDigest.getInstance("MD5")
         messageDigest.update(str.toByteArray(charset("UTF-8")))
         val digest = messageDigest.digest()
@@ -94,17 +93,17 @@ object SVGACache {
         return sb
     }
 
-    fun buildCacheKey(url: URL): String = buildCacheKey(url.toString())
+    internal fun buildCacheKey(url: URL): String = buildCacheKey(url.toString())
 
-    fun buildCacheDir(cacheKey: String): File {
+    internal fun buildCacheDir(cacheKey: String): File {
         return File("$cacheDir$cacheKey/")
     }
 
-    fun buildSvgaFile(cacheKey: String): File {
-        return File("$cacheDir$cacheKey.svga")
+    internal fun buildCacheFile(cacheKey: String): File {
+        return File("$cacheDir$cacheKey")
     }
 
-    fun buildAudioFile(audio: String): File {
+    internal fun buildAudioFile(audio: String): File {
         return File("$cacheDir$audio.mp3")
     }
 

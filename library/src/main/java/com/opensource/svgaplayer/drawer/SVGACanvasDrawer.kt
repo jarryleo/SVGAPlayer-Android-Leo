@@ -262,9 +262,16 @@ internal class SVGACanvasDrawer(
         val bitmapKey = if (imageKey.endsWith(".matte")) imageKey.substring(
             0, imageKey.length - 6
         ) else imageKey
-        val drawingBitmap =
-            (dynamicItem?.dynamicImage?.get(bitmapKey) ?: videoItem.imageMap[bitmapKey]) ?: return
         val frameMatrix = shareFrameMatrix(sprite.frameEntity.transform)
+        val ma = floatArrayOf(0f, 0f, 0f, 0f, 0f, 0f, 0f, 0f, 0f)
+        frameMatrix.getValues(ma)
+        val scaleX = ma[0]
+        val scaleY = ma[4]
+        val rqWidth = sprite.frameEntity.layout.width * scaleX
+        val rqHeight = sprite.frameEntity.layout.height * scaleY
+        val drawingBitmap =
+            (dynamicItem?.requestImage(bitmapKey, rqWidth.roundToInt(), rqHeight.roundToInt())
+                ?: videoItem.imageMap[bitmapKey]) ?: return
         val paint = this.sharedValues.sharedPaint()
         paint.isAntiAlias = videoItem.antiAlias
         paint.isFilterBitmap = videoItem.antiAlias

@@ -7,7 +7,7 @@ import android.media.SoundPool
 import android.os.Build
 import com.opensource.svgaplayer.bitmap.SVGABitmapByteArrayDecoder
 import com.opensource.svgaplayer.bitmap.SVGABitmapFileDecoder
-import com.opensource.svgaplayer.cache.SVGACache
+import com.opensource.svgaplayer.cache.SVGAFileCache
 import com.opensource.svgaplayer.entities.SVGAAudioEntity
 import com.opensource.svgaplayer.entities.SVGAVideoSpriteEntity
 import com.opensource.svgaplayer.proto.AudioEntity
@@ -278,7 +278,7 @@ class SVGAVideoEntity {
         val audiosFileMap = HashMap<String, File>()
         if (audiosDataMap.count() > 0) {
             audiosDataMap.forEach {
-                val audioCache = SVGACache.buildAudioFile(it.key)
+                val audioCache = SVGAFileCache.buildAudioFile(it.key)
                 audiosFileMap[it.key] =
                     audioCache.takeIf { file -> file.exists() } ?: generateAudioFile(
                         audioCache,

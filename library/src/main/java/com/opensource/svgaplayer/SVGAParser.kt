@@ -3,7 +3,7 @@ package com.opensource.svgaplayer
 import android.content.Context
 import android.os.Handler
 import android.os.Looper
-import com.opensource.svgaplayer.cache.SVGACache
+import com.opensource.svgaplayer.cache.SVGAFileCache
 import com.opensource.svgaplayer.cache.SVGAMemoryCache
 import com.opensource.svgaplayer.coroutine.SvgaCoroutineManager
 import com.opensource.svgaplayer.download.FileDownloader
@@ -97,7 +97,7 @@ class SVGAParser private constructor(context: Context) {
                 mContext?.assets?.open(name)?.let {
                     decodeFromInputStream(
                         it,
-                        SVGACache.buildCacheKey("file:///assets/$name"),
+                        SVGAFileCache.buildCacheKey("file:///assets/$name"),
                         config,
                         callback,
                         true,
@@ -138,12 +138,12 @@ class SVGAParser private constructor(context: Context) {
         if (decodeFromMemoryCacheKey(memoryCacheKey, config, callback, playCallback, urlPath)) {
             return null
         }
-        val cacheKey = SVGACache.buildCacheKey(url)
-        val cachedType = SVGACache.getCachedType(cacheKey)
+        val cacheKey = SVGAFileCache.buildCacheKey(url)
+        val cachedType = SVGAFileCache.getCachedType(cacheKey)
         return if (cachedType != null) { //加载本地缓存数据
             LogUtils.info(TAG, "this url has disk cached")
             SvgaCoroutineManager.launchIo {
-                if (cachedType == SVGACache.Type.ZIP) {
+                if (cachedType == SVGAFileCache.Type.ZIP) {
                     decodeFromUnzipDirCacheKey(
                         cacheKey,
                         config,
@@ -199,7 +199,7 @@ class SVGAParser private constructor(context: Context) {
                     TAG,
                     "================ decode $alias from svga cachel file to entity ================"
                 )
-                val svgaFile = SVGACache.buildSvgaFile(cacheKey)
+                val svgaFile = SVGAFileCache.buildCacheFile(cacheKey)
                 FileInputStream(svgaFile).use { inputStream ->
                     //检查是否是zip文件
                     val magicCode = ByteArray(4)
@@ -270,9 +270,9 @@ class SVGAParser private constructor(context: Context) {
                 }
                 if (isZipFile(magicCode)) {
                     LogUtils.info(TAG, "decode from zip file")
-                    if (!SVGACache.buildCacheDir(cacheKey).exists() || isUnzipping) {
+                    if (!SVGAFileCache.buildCacheDir(cacheKey).exists() || isUnzipping) {
                         synchronized(fileLock) {
-                            if (!SVGACache.buildCacheDir(cacheKey).exists()) {
+                            if (!SVGAFileCache.buildCacheDir(cacheKey).exists()) {
                                 isUnzipping = true
                                 LogUtils.info(TAG, "no cached, prepare to unzip")
                                 unzip(inputStream, cacheKey)
@@ -380,7 +380,7 @@ class SVGAParser private constructor(context: Context) {
         }
         return SvgaCoroutineManager.launchIo {
             try {
-                val cacheDir = SVGACache.buildCacheDir(cacheKey)
+                val cacheDir = SVGAFileCache.buildCacheDir(cacheKey)
                 File(cacheDir, "movie.binary").takeIf { it.isFile }?.let { binaryFile ->
                     try {
                         LogUtils.info(TAG, "binary change to entity")
@@ -486,7 +486,7 @@ class SVGAParser private constructor(context: Context) {
     // 解压
     private fun unzip(inputStream: InputStream, cacheKey: String) {
         LogUtils.info(TAG, "================ unzip prepare ================")
-        val cacheDir = SVGACache.buildCacheDir(cacheKey)
+        val cacheDir = SVGAFileCache.buildCacheDir(cacheKey)
         cacheDir.mkdirs()
         try {
             BufferedInputStream(inputStream).use {
@@ -518,14 +518,14 @@ class SVGAParser private constructor(context: Context) {
                 }
             }
             //解压完成，删除下载缓存
-            val downloadCacheFile = SVGACache.buildSvgaFile(cacheKey)
+            val downloadCacheFile = SVGAFileCache.buildCacheFile(cacheKey)
             if (downloadCacheFile.exists()) {
                 downloadCacheFile.delete()
             }
         } catch (e: Exception) {
             LogUtils.error(TAG, "================ unzip error ================")
             LogUtils.error(TAG, "error", e)
-            SVGACache.clearDir(cacheDir.absolutePath)
+            SVGAFileCache.clearDir(cacheDir.absolutePath)
             cacheDir.delete()
             throw e
         }

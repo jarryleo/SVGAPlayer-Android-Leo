@@ -2,8 +2,9 @@ package com.opensource.svgaplayer
 
 import android.content.Context
 import android.net.http.HttpResponseCache
-import com.opensource.svgaplayer.cache.SVGACache
+import com.opensource.svgaplayer.cache.SVGAFileCache
 import com.opensource.svgaplayer.cache.SVGAMemoryCache
+import com.opensource.svgaplayer.cache.SVGABitmapCache
 import com.opensource.svgaplayer.utils.log.ILogger
 import com.opensource.svgaplayer.utils.log.SVGALogger
 import java.io.File
@@ -31,9 +32,10 @@ object SVGAManager {
             e.printStackTrace()
         }
         // 配置cache
-        SVGACache.init(context)
+        SVGAFileCache.init(context)
         //修改内存缓存大小
         SVGAMemoryCache.limitCount = memoryCacheCount
+        SVGABitmapCache.limitCount = memoryCacheCount
         //自定义线程池
         threadPoolExecutor?.let {
             SVGAParser.setThreadPoolExecutor(it)
@@ -55,5 +57,15 @@ object SVGAManager {
      */
     fun onLowMemory() {
         SVGAMemoryCache.INSTANCE.clear()
+        SVGABitmapCache.INSTANCE.clear()
+    }
+
+    /**
+     * 清除缓存
+     */
+    fun clearCache() {
+        SVGAMemoryCache.INSTANCE.clear()
+        SVGABitmapCache.INSTANCE.clear()
+        SVGAFileCache.clearCache()
     }
 }

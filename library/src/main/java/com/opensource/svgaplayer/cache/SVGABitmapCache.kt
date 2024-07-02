@@ -1,28 +1,27 @@
 package com.opensource.svgaplayer.cache
 
+import android.graphics.Bitmap
 import android.os.Build
 import android.util.LruCache
-import com.opensource.svgaplayer.SVGAConfig
-import com.opensource.svgaplayer.SVGAVideoEntity
 import java.lang.ref.WeakReference
 
 /**
- * @Description SVGA内存缓存
- * @Author lyd
- * @Time 2023/10/8 10:15
+ * @Description bitmap内存缓存
  */
-class SVGAMemoryCache(private val cacheLimit: Int = 3) {
+class SVGABitmapCache(private val cacheLimit: Int = limitCount) {
 
     private val lruCache by lazy {
-        object : LruCache<String, WeakReference<SVGAVideoEntity>>(cacheLimit) {
+        object : LruCache<String, WeakReference<Bitmap>>(cacheLimit) {
             override fun entryRemoved(
                 evicted: Boolean,
                 key: String?,
-                oldValue: WeakReference<SVGAVideoEntity>?,
-                newValue: WeakReference<SVGAVideoEntity>?
+                oldValue: WeakReference<Bitmap>?,
+                newValue: WeakReference<Bitmap>?
             ) {
                 if (evicted) {
-                    oldValue?.get()?.clear()
+                    oldValue?.get()?.apply {
+                        if (!isRecycled) recycle()
+                    }
                     oldValue?.clear()
                 }
             }
@@ -30,11 +29,16 @@ class SVGAMemoryCache(private val cacheLimit: Int = 3) {
 
     }
 
-    fun getData(key: String): SVGAVideoEntity? {
-        return lruCache.get(key)?.get()
+    fun getData(key: String): Bitmap? {
+        val bitmap = lruCache.get(key)?.get()
+        if (bitmap?.isRecycled == true){
+            lruCache.remove(key)
+            return null
+        }
+        return bitmap
     }
 
-    fun putData(key: String, entity: SVGAVideoEntity) {
+    fun putData(key: String, entity: Bitmap) {
         lruCache.put(key, WeakReference(entity))
     }
 
@@ -54,10 +58,10 @@ class SVGAMemoryCache(private val cacheLimit: Int = 3) {
 
     companion object {
 
-        val INSTANCE by lazy { SVGAMemoryCache(limitCount) }
+        val INSTANCE by lazy { SVGABitmapCache(limitCount) }
 
         /** 内存缓存个数 */
-        var limitCount = 3
+        var limitCount = 5
             set(value) {
                 field = value
                 INSTANCE.resizeCache(value)
@@ -66,8 +70,8 @@ class SVGAMemoryCache(private val cacheLimit: Int = 3) {
         /**
          * 拼接缓存Key所需要的字段
          */
-        fun createKey(path: String, config: SVGAConfig): String {
-            return "key:{path = $path frameWidth = ${config.frameWidth} frameHeight = ${config.frameHeight}}".let {
+        fun createKey(path: String, width: Int, height: Int): String {
+            return "key:{path = $path width = $width height = $height}".let {
                 SVGAFileCache.buildCacheKey(it)
             }
         }

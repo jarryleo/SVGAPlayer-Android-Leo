@@ -1,7 +1,7 @@
 package com.opensource.svgaplayer.download
 
 import android.net.http.HttpResponseCache
-import com.opensource.svgaplayer.cache.SVGACache
+import com.opensource.svgaplayer.cache.SVGAFileCache
 import com.opensource.svgaplayer.coroutine.SvgaCoroutineManager
 import com.opensource.svgaplayer.utils.log.LogUtils
 import kotlinx.coroutines.CancellationException
@@ -17,6 +17,7 @@ open class FileDownloader {
     companion object {
         private const val TAG = "SVGAFileDownloader"
         private const val SIZE = 4096
+        private const val TIMEOUT = 30_000
     }
 
     /**
@@ -31,12 +32,12 @@ open class FileDownloader {
     ): Job {
         return SvgaCoroutineManager.launchIo {
             //下载到缓存地址
-            val cacheKey = SVGACache.buildCacheKey(url)
-            val cacheFile = SVGACache.buildSvgaFile(cacheKey)
+            val cacheKey = SVGAFileCache.buildCacheKey(url)
+            val cacheFile = SVGAFileCache.buildCacheFile(cacheKey)
             try {
                 LogUtils.info(
-                    TAG, "================ svga file download start ================ " +
-                            "\r\n svga url = $url"
+                    TAG, "================ file download start ================ " +
+                            "\r\n url = $url"
                 )
                 if (HttpResponseCache.getInstalled() == null) {
                     LogUtils.error(
@@ -47,7 +48,7 @@ open class FileDownloader {
                 }
 
                 (url.openConnection() as? HttpURLConnection)?.let {
-                    it.connectTimeout = 30 * 1000
+                    it.connectTimeout = TIMEOUT
                     it.requestMethod = "GET"
                     it.setRequestProperty("Connection", "close")
                     it.connect()
@@ -69,12 +70,12 @@ open class FileDownloader {
                     }
                     if (isActive) {
                         LogUtils.info(
-                            TAG, "================ svga file download success ================"
+                            TAG, "================ file download success ================"
                         )
                         complete(cacheFile.inputStream())
                     } else {
                         LogUtils.info(
-                            TAG, "================ svga file download cancel ================"
+                            TAG, "================ file download cancel ================"
                         )
                         cacheFile.delete()
                         failure(CancellationException("download cancel"))
@@ -82,7 +83,7 @@ open class FileDownloader {
                 }
             } catch (e: Exception) {
                 cacheFile.delete()
-                LogUtils.error(TAG, "================ svga file download fail ================")
+                LogUtils.error(TAG, "================ file download fail ================")
                 LogUtils.error(TAG, "error: ${e.message}")
                 e.printStackTrace()
                 failure(e)

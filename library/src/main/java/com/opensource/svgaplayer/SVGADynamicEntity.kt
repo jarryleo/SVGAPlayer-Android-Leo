@@ -1,15 +1,12 @@
 package com.opensource.svgaplayer
 
 import android.graphics.Bitmap
-import android.graphics.BitmapFactory
 import android.graphics.Canvas
 import android.text.BoringLayout
 import android.text.StaticLayout
 import android.text.TextPaint
 import com.opensource.svgaplayer.coroutine.SvgaCoroutineManager
-import java.net.HttpURLConnection
-import java.net.URL
-import java.net.URLDecoder
+import com.opensource.svgaplayer.download.BitmapDownloader
 
 /**
  * Created by cuiminghui on 2017/3/30.
@@ -18,7 +15,9 @@ class SVGADynamicEntity {
 
     internal var dynamicHidden: HashMap<String, Boolean> = hashMapOf()
 
-    internal var dynamicImage: HashMap<String, Bitmap> = hashMapOf()
+    private var dynamicImage: HashMap<String, Bitmap> = hashMapOf()
+
+    private var dynamicImageUrl: HashMap<String, String> = hashMapOf()
 
     internal var dynamicText: HashMap<String, String> = hashMapOf()
 
@@ -28,13 +27,15 @@ class SVGADynamicEntity {
 
     internal var dynamicBoringLayoutText: HashMap<String, BoringLayout> = hashMapOf()
 
-    internal var dynamicDrawer: HashMap<String, (canvas: Canvas, frameIndex: Int) -> Boolean> = hashMapOf()
+    internal var dynamicDrawer: HashMap<String, (canvas: Canvas, frameIndex: Int) -> Boolean> =
+        hashMapOf()
 
     //点击事件回调map
     internal var mClickMap: HashMap<String, IntArray> = hashMapOf()
     internal var dynamicIClickArea: HashMap<String, IClickAreaListener> = hashMapOf()
 
-    internal var dynamicDrawerSized: HashMap<String, (canvas: Canvas, frameIndex: Int, width: Int, height: Int) -> Boolean> = hashMapOf()
+    internal var dynamicDrawerSized: HashMap<String, (canvas: Canvas, frameIndex: Int, width: Int, height: Int) -> Boolean> =
+        hashMapOf()
 
     internal var isTextDirty = false
 
@@ -51,37 +52,25 @@ class SVGADynamicEntity {
 
     /**
      * 从网络加载图片
-     * todo: 优化图片加载,bitmap 做内存缓存
      */
     fun setDynamicImage(url: String, forKey: String) {
-        SvgaCoroutineManager.launchIo {
-            val urlSafe = try {
-                URL(URLDecoder.decode(url, "UTF-8"))
-            }catch (e: Exception){
-                e.printStackTrace()
-                return@launchIo
-            }
-            (urlSafe.openConnection() as? HttpURLConnection)?.let {
-                try {
-                    it.connectTimeout = 30 * 1000
-                    it.requestMethod = "GET"
-                    it.connect()
-                    it.inputStream.use { stream ->
-                        BitmapFactory.decodeStream(stream)?.let { bitmap ->
-                            setDynamicImage(bitmap, forKey)
-                        }
-                    }
-                } catch (e: Exception) {
-                    e.printStackTrace()
-                } finally {
-                    try {
-                        it.disconnect()
-                    } catch (disconnectException: Throwable) {
-                        // ignored here
-                    }
+        dynamicImageUrl[forKey] = url
+    }
+
+    fun requestImage(forKey: String, width: Int, height: Int): Bitmap? {
+        if (dynamicImage[forKey] != null) {
+            return dynamicImage[forKey]
+        }
+        val url = dynamicImageUrl[forKey]
+        if (url != null) {
+            SvgaCoroutineManager.launchIo {
+                val bitmap = BitmapDownloader.downloadBitmap(url, width, height)
+                if (bitmap != null) {
+                    dynamicImage[forKey] = bitmap
                 }
             }
         }
+        return null
     }
 
     fun setDynamicText(text: String, textPaint: TextPaint, forKey: String) {
@@ -146,7 +135,10 @@ class SVGADynamicEntity {
         })
     }
 
-    fun setDynamicDrawerSized(drawer: (canvas: Canvas, frameIndex: Int, width: Int, height: Int) -> Boolean, forKey: String) {
+    fun setDynamicDrawerSized(
+        drawer: (canvas: Canvas, frameIndex: Int, width: Int, height: Int) -> Boolean,
+        forKey: String
+    ) {
         this.dynamicDrawerSized[forKey] = drawer
     }
 
