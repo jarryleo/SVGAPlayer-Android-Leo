@@ -304,8 +304,10 @@ internal class SVGACanvasDrawer(
         frameMatrix.getValues(matrixArray)
         val x0 = matrixArray[2].toInt()
         val y0 = matrixArray[5].toInt()
-        val x1 = (drawingBitmap.width * matrixArray[0] + matrixArray[2]).toInt()
-        val y1 = (drawingBitmap.height * matrixArray[4] + matrixArray[5]).toInt()
+        val scaleX1 = matrixArray[0]
+        val scaleY1 = matrixArray[4]
+        val x1 = (drawingBitmap.width * scaleX1 + matrixArray[2]).toInt()
+        val y1 = (drawingBitmap.height * scaleY1 + matrixArray[5]).toInt()
         val rect = Rect(x0, y0, x1, y1)
         dynamicItem?.dynamicIClickArea.let {
             it?.get(imageKey)?.onResponseArea(imageKey, x0, y0, x1, y1)
@@ -316,10 +318,10 @@ internal class SVGACanvasDrawer(
     @SuppressLint("DiscouragedPrivateApi")
     private fun drawTextOnBitmap(
         canvas: Canvas,
-        drawingBitmap: Bitmap,
+        drawingBitmap: Bitmap,  //原svga 占位图大小
         sprite: SVGADrawerSprite,
         frameMatrix: Matrix,
-        rect: Rect
+        rect: Rect,  //绘制区域
     ) {
         if (dynamicItem?.isTextDirty == true) {
             this.drawTextCache.clear()
@@ -343,26 +345,27 @@ internal class SVGACanvasDrawer(
                     val top = fontMetrics.top
                     val bottom = fontMetrics.bottom
                     val baseLineY = drawRect.centerY() - top / 2 - bottom / 2
+                    val left = drawRect.centerX().toFloat()
                     textCanvas.drawText(
-                        drawingText, drawRect.centerX().toFloat(), baseLineY, drawingTextPaint
+                        drawingText, left, baseLineY, drawingTextPaint
                     )
                     drawTextCache.put(imageKey, bitmap)
                 }
             }
         }
 
-        dynamicItem?.dynamicBoringLayoutText?.get(imageKey)?.let {
+        dynamicItem?.dynamicBoringLayoutText?.get(imageKey)?.let { dl ->
             drawTextCache[imageKey]?.let {
                 textBitmap = it
             } ?: kotlin.run {
-                it.paint.isAntiAlias = true
+                dl.paint.isAntiAlias = true
                 val bitmap = Bitmap.createBitmap(
                     drawingBitmap.width, drawingBitmap.height, Bitmap.Config.ARGB_8888
                 )
                 textBitmap = bitmap
                 val textCanvas = Canvas(bitmap)
-                textCanvas.translate(0f, ((drawingBitmap.height - it.height) / 2).toFloat())
-                it.draw(textCanvas)
+                textCanvas.translate(0f, ((drawingBitmap.height - dl.height) / 2).toFloat())
+                dl.draw(textCanvas)
                 drawTextCache.put(imageKey, bitmap)
             }
         }
@@ -405,17 +408,28 @@ internal class SVGACanvasDrawer(
                 }
 
                 drawTextRtlCache[imageKey] = layout.text.indices.any { layout.isRtlCharAt(it) }
-                val bitmap = Bitmap.createBitmap(
-                    targetWidth, drawingBitmap.height, Bitmap.Config.ARGB_8888
-                )
-                textBitmap = bitmap
-                val textCanvas = Canvas(bitmap)
-                val scale = drawingBitmap.height / layout.height.toFloat()
-                //textCanvas.translate(0f, ((drawingBitmap.height - layout.height) / 2).toFloat())
-                textCanvas.scale(1f, scale)
-                layout.draw(textCanvas)
-                drawTextCache[imageKey] = bitmap
-
+                if (isMarquee) {
+                    val scaleY = rect.height() / layout.height.toFloat()
+                    val bitmapWidth = (targetWidth * scaleY).roundToInt()
+                    val bitmap = Bitmap.createBitmap(
+                        bitmapWidth, rect.height(), Bitmap.Config.ARGB_8888
+                    )
+                    textBitmap = bitmap
+                    val textCanvas = Canvas(bitmap)
+                    textCanvas.scale(scaleY, scaleY)
+                    layout.draw(textCanvas)
+                    drawTextCache[imageKey] = bitmap
+                } else {
+                    val bitmap = Bitmap.createBitmap(
+                        drawingBitmap.width, drawingBitmap.height, Bitmap.Config.ARGB_8888
+                    )
+                    textBitmap = bitmap
+                    val textCanvas = Canvas(bitmap)
+                    val scale = drawingBitmap.height / layout.height.toFloat()
+                    textCanvas.scale(1f, scale)
+                    layout.draw(textCanvas)
+                    drawTextCache[imageKey] = bitmap
+                }
             }
         }
         textBitmap?.let { bitmap ->

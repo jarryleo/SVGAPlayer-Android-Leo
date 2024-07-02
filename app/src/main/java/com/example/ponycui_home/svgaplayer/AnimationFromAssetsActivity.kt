@@ -24,6 +24,7 @@ class AnimationFromAssetsActivity : Activity() {
         animationView = SVGAImageView(this)
         animationView.setBackgroundColor(Color.BLACK)
         setContentView(animationView)
+//        setContentView(animationView, ViewGroup.LayoutParams(100.dp, 100.dp))
         /*animationView.setOnClickListener {
             animationView.stepToFrame(currentIndex++, false)
         }*/
