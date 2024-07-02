@@ -8,10 +8,6 @@ package com.opensource.svgaplayer
 
 data class SVGAConfig(
     /**
-     * 循环次数，若小于等于0为无限循环
-     */
-    val loopCount: Int = -1,
-    /**
      * 加载到内存中的宽度，0：使用原图
      */
     val frameWidth: Int = 0,
@@ -27,4 +23,8 @@ data class SVGAConfig(
      * 是否加载原图，默认按View尺寸加载，节约内存
      */
     val isOriginal: Boolean = false,
+    /**
+     * 循环次数，若小于等于0为无限循环
+     */
+    val loopCount: Int = -1,
 )

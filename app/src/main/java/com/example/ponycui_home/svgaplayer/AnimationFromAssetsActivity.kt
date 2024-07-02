@@ -11,7 +11,6 @@ import android.text.StaticLayout
 import android.text.TextPaint
 import android.text.TextUtils
 import android.util.Log
-import android.view.ViewGroup
 import com.opensource.svgaplayer.SVGAImageView
 import com.opensource.svgaplayer.utils.log.SVGALogger.setLogEnabled
 import kotlin.math.roundToInt
@@ -24,7 +23,7 @@ class AnimationFromAssetsActivity : Activity() {
         super.onCreate(savedInstanceState)
         animationView = SVGAImageView(this)
         animationView.setBackgroundColor(Color.BLACK)
-
+        setContentView(animationView)
         /*animationView.setOnClickListener {
             animationView.stepToFrame(currentIndex++, false)
         }*/
@@ -32,7 +31,6 @@ class AnimationFromAssetsActivity : Activity() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
             loadAnimation()
         }
-        setContentView(animationView, ViewGroup.LayoutParams(400, 400))
     }
 
     @RequiresApi(api = Build.VERSION_CODES.M)
@@ -62,6 +60,7 @@ class AnimationFromAssetsActivity : Activity() {
 //                    .setEllipsize(TextUtils.TruncateAt.END)
                 .build()
             setDynamicText(build, "NICK1")
+//            setDynamicText(nick, textPaint, "NICK1")
         }
         Log.d("SVGA", "## name $name")
     }

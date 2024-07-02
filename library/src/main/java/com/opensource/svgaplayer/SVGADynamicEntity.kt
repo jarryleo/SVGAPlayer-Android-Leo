@@ -49,6 +49,10 @@ class SVGADynamicEntity {
         this.dynamicImage[forKey] = bitmap
     }
 
+    /**
+     * 从网络加载图片
+     * todo: 优化图片加载,bitmap 做内存缓存
+     */
     fun setDynamicImage(url: String, forKey: String) {
         SvgaCoroutineManager.launchIo {
             val urlSafe = try {
@@ -63,10 +67,8 @@ class SVGADynamicEntity {
                     it.requestMethod = "GET"
                     it.connect()
                     it.inputStream.use { stream ->
-                        BitmapFactory.decodeStream(stream)?.let {
-                            SvgaCoroutineManager.launchMain {
-                                setDynamicImage(it, forKey)
-                            }
+                        BitmapFactory.decodeStream(stream)?.let { bitmap ->
+                            setDynamicImage(bitmap, forKey)
                         }
                     }
                 } catch (e: Exception) {

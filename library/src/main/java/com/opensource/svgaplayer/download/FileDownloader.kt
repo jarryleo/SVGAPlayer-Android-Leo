@@ -30,6 +30,9 @@ open class FileDownloader {
         url: URL, complete: (inputStream: InputStream) -> Unit, failure: (e: Exception) -> Unit = {}
     ): Job {
         return SvgaCoroutineManager.launchIo {
+            //下载到缓存地址
+            val cacheKey = SVGACache.buildCacheKey(url)
+            val cacheFile = SVGACache.buildSvgaFile(cacheKey)
             try {
                 LogUtils.info(
                     TAG, "================ svga file download start ================ " +
@@ -48,9 +51,6 @@ open class FileDownloader {
                     it.requestMethod = "GET"
                     it.setRequestProperty("Connection", "close")
                     it.connect()
-                    //下载到缓存地址
-                    val cacheKey = SVGACache.buildCacheKey(url)
-                    val cacheFile = SVGACache.buildSvgaFile(cacheKey)
                     if (!cacheFile.exists()) {
                         cacheFile.createNewFile()
                     }
@@ -76,10 +76,12 @@ open class FileDownloader {
                         LogUtils.info(
                             TAG, "================ svga file download cancel ================"
                         )
+                        cacheFile.delete()
                         failure(CancellationException("download cancel"))
                     }
                 }
             } catch (e: Exception) {
+                cacheFile.delete()
                 LogUtils.error(TAG, "================ svga file download fail ================")
                 LogUtils.error(TAG, "error: ${e.message}")
                 e.printStackTrace()

@@ -141,7 +141,7 @@ class SVGAParser private constructor(context: Context) {
         val cacheKey = SVGACache.buildCacheKey(url)
         val cachedType = SVGACache.getCachedType(cacheKey)
         return if (cachedType != null) { //加载本地缓存数据
-            LogUtils.info(TAG, "this url cached")
+            LogUtils.info(TAG, "this url has disk cached")
             SvgaCoroutineManager.launchIo {
                 if (cachedType == SVGACache.Type.ZIP) {
                     decodeFromUnzipDirCacheKey(
@@ -218,7 +218,6 @@ class SVGAParser private constructor(context: Context) {
                         )
                     } else {
                         LogUtils.info(TAG, "inflate start")
-                        LogUtils.info(TAG, "inflate complete")
                         val videoItem = SVGAVideoEntity(
                             MovieEntity.ADAPTER.decode(InflaterInputStream(inputStream)),
                             File(cacheKey),
@@ -226,6 +225,7 @@ class SVGAParser private constructor(context: Context) {
                             config.frameHeight,
                             memoryCacheKey
                         )
+                        LogUtils.info(TAG, "inflate complete")
                         LogUtils.info(TAG, "SVGAVideoEntity prepare start")
                         videoItem.prepare({
                             LogUtils.info(TAG, "SVGAVideoEntity prepare success")
