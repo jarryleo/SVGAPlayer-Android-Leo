@@ -390,9 +390,13 @@ internal class SVGACanvasDrawer(
                 drawTextMarqueeCache[imageKey] = isMarquee
                 val targetWidth = if (isMarquee) textWidth else drawingBitmap.width
                 val layout = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                    StaticLayout.Builder.obtain(it.text, 0, it.text.length, it.paint, targetWidth)
-                        .setAlignment(it.alignment).setMaxLines(lineMax)
-                        .setEllipsize(TextUtils.TruncateAt.END).build()
+                    StaticLayout.Builder
+                        .obtain(it.text, 0, it.text.length, it.paint, targetWidth)
+                        .setAlignment(it.alignment)
+                        .setMaxLines(lineMax)
+                        .setLineSpacing(it.spacingAdd, it.spacingMultiplier)
+                        .setEllipsize(TextUtils.TruncateAt.END)
+                        .build()
                 } else {
                     StaticLayout(
                         it.text,

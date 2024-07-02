@@ -2,11 +2,16 @@ package com.opensource.svgaplayer
 
 import android.graphics.Bitmap
 import android.graphics.Canvas
+import android.graphics.Paint
+import android.os.Build
 import android.text.BoringLayout
 import android.text.StaticLayout
 import android.text.TextPaint
+import android.text.TextUtils
 import com.opensource.svgaplayer.coroutine.SvgaCoroutineManager
 import com.opensource.svgaplayer.download.BitmapDownloader
+import com.opensource.svgaplayer.entities.SVGATextEntity
+import kotlin.math.roundToInt
 
 /**
  * Created by cuiminghui on 2017/3/30.
@@ -89,6 +94,46 @@ class SVGADynamicEntity {
         BoringLayout.isBoring(layoutText.text, layoutText.paint)?.let {
             this.dynamicBoringLayoutText.put(forKey, layoutText)
         }
+    }
+
+    fun setDynamicText(forKey: String, textEntity: SVGATextEntity) {
+        val textPaint = TextPaint(Paint.ANTI_ALIAS_FLAG)
+        textPaint.color = textEntity.textColor
+        textPaint.textSize = textEntity.textSize
+        val text = textEntity.text
+        val width = if (textEntity.ellipsize == TextUtils.TruncateAt.MARQUEE) {
+            textPaint.measureText(text).roundToInt()
+        } else {
+            Int.MAX_VALUE
+        }
+        val layout = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            StaticLayout.Builder.obtain(
+                text,
+                0,
+                text.length,
+                textPaint,
+                width
+            )
+                .setAlignment(textEntity.alignment)
+                .setMaxLines(textEntity.maxLines)
+                .setEllipsize(textEntity.ellipsize)
+                .build()
+        } else {
+            StaticLayout(
+                text,
+                0,
+                text.length,
+                textPaint,
+                width,
+                textEntity.alignment,
+                textEntity.spacingMultiplier,
+                textEntity.spacingAdd,
+                false,
+                textEntity.ellipsize,
+                width
+            )
+        }
+        setDynamicText(layout, forKey)
     }
 
     fun setDynamicDrawer(drawer: (canvas: Canvas, frameIndex: Int) -> Boolean, forKey: String) {
