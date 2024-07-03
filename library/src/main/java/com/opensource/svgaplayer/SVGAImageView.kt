@@ -59,6 +59,7 @@ open class SVGAImageView @JvmOverloads constructor(
     private var mEndFrame = 0
 
     private var lastSource: String? = null
+    private var lastConfig: SVGAConfig? = null
     private var loadJob: Job? = null
     private var dynamicBlock: (SVGADynamicEntity.() -> Unit)? = {}
     internal var onError: ((SVGAImageView) -> Unit)? = {}
@@ -114,6 +115,7 @@ open class SVGAImageView @JvmOverloads constructor(
             return this
         }
         lastSource = source
+        lastConfig = config
         //已有宽高才加载动画
         if (width > 0 && height > 0) {
             parserSource(source, config)
@@ -121,10 +123,17 @@ open class SVGAImageView @JvmOverloads constructor(
         return this
     }
 
-    private fun parserSource(source: String?, config: SVGAConfig? = null) {
+    private fun parserSource(source: String?, config: SVGAConfig? = lastConfig) {
         if (source.isNullOrEmpty()) return
         //设置动画属性
         loops = config?.loopCount ?: 0
+        var cfg = config
+        if (cfg != null && !cfg.isOriginal){
+            cfg = cfg.copy(
+                frameWidth = width,
+                frameHeight = height
+            )
+        }
         val parser = SVGAParser.shareParser()
         if (source.startsWith("http://") || source.startsWith("https://")) {
             val url = try {
@@ -135,13 +144,13 @@ open class SVGAImageView @JvmOverloads constructor(
             }
             loadJob = parser.decodeFromURL(
                 url,
-                config = config ?: SVGAConfig(frameWidth = width, frameHeight = height),
+                config = cfg ?: SVGAConfig(frameWidth = width, frameHeight = height),
                 SVGAViewLoadCallback(this)
             )
         } else {
             loadJob = parser.decodeFromAssets(
                 source,
-                config = config ?: SVGAConfig(frameWidth = width, frameHeight = height),
+                config = cfg ?: SVGAConfig(frameWidth = width, frameHeight = height),
                 SVGAViewLoadCallback(this)
             )
         }
