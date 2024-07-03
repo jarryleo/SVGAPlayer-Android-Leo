@@ -2,9 +2,11 @@ package com.opensource.svgaplayer
 
 import android.content.Context
 import android.net.http.HttpResponseCache
+import com.opensource.svgaplayer.cache.SVGABitmapCache
 import com.opensource.svgaplayer.cache.SVGAFileCache
 import com.opensource.svgaplayer.cache.SVGAMemoryCache
-import com.opensource.svgaplayer.cache.SVGABitmapCache
+import com.opensource.svgaplayer.url.UrlDecoder
+import com.opensource.svgaplayer.url.UrlDecoderManager
 import com.opensource.svgaplayer.utils.log.ILogger
 import com.opensource.svgaplayer.utils.log.SVGALogger
 import java.io.File
@@ -23,6 +25,7 @@ object SVGAManager {
         httpCacheSize: Long = (256 * 1024 * 1024).toLong(),
         logEnabled: Boolean = BuildConfig.DEBUG,
         loggerProxy: ILogger? = null,
+        urlDecoder: UrlDecoder? = null,
         threadPoolExecutor: ThreadPoolExecutor? = null
     ) {
         try {
@@ -39,6 +42,10 @@ object SVGAManager {
         //自定义线程池
         threadPoolExecutor?.let {
             SVGAParser.setThreadPoolExecutor(it)
+        }
+        //初始化url解码器
+        urlDecoder?.let {
+            UrlDecoderManager.setUrlDecoder(it)
         }
         //初始化
         SVGAParser.init(context)

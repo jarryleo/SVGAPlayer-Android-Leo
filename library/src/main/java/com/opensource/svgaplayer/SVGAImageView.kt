@@ -11,6 +11,7 @@ import android.view.MotionEvent
 import android.view.View
 import android.view.animation.LinearInterpolator
 import android.widget.ImageView
+import com.opensource.svgaplayer.url.UrlDecoderManager
 import com.opensource.svgaplayer.utils.SVGARange
 import com.opensource.svgaplayer.utils.log.LogUtils
 import kotlinx.coroutines.Job
@@ -128,16 +129,19 @@ open class SVGAImageView @JvmOverloads constructor(
         //设置动画属性
         loops = config?.loopCount ?: 0
         var cfg = config
-        if (cfg != null && !cfg.isOriginal){
+        if (cfg != null && !cfg.isOriginal) {
             cfg = cfg.copy(
                 frameWidth = width,
                 frameHeight = height
             )
         }
+        val urlDecoder = UrlDecoderManager.getUrlDecoder()
+        val realUrl =
+            urlDecoder.decodeSvgaUrl(source, cfg?.frameWidth ?: width, cfg?.frameHeight ?: height)
         val parser = SVGAParser.shareParser()
-        if (source.startsWith("http://") || source.startsWith("https://")) {
+        if (realUrl.startsWith("http://") || realUrl.startsWith("https://")) {
             val url = try {
-                URL(URLDecoder.decode(source, "UTF-8"))
+                URL(URLDecoder.decode(realUrl, "UTF-8"))
             } catch (e: Exception) {
                 e.printStackTrace()
                 return
@@ -149,7 +153,7 @@ open class SVGAImageView @JvmOverloads constructor(
             )
         } else {
             loadJob = parser.decodeFromAssets(
-                source,
+                realUrl,
                 config = cfg ?: SVGAConfig(frameWidth = width, frameHeight = height),
                 SVGAViewLoadCallback(this)
             )

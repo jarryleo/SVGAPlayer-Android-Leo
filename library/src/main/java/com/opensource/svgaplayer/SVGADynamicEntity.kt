@@ -11,6 +11,7 @@ import android.text.TextUtils
 import com.opensource.svgaplayer.coroutine.SvgaCoroutineManager
 import com.opensource.svgaplayer.download.BitmapDownloader
 import com.opensource.svgaplayer.entities.SVGATextEntity
+import com.opensource.svgaplayer.url.UrlDecoderManager
 import kotlin.math.roundToInt
 
 /**
@@ -68,8 +69,9 @@ class SVGADynamicEntity {
         }
         val url = dynamicImageUrl[forKey]
         if (url != null) {
+            val realUrl = UrlDecoderManager.getUrlDecoder().decodeImageUrl(url, width, height)
             SvgaCoroutineManager.launchIo {
-                val bitmap = BitmapDownloader.downloadBitmap(url, width, height)
+                val bitmap = BitmapDownloader.downloadBitmap(realUrl, width, height)
                 if (bitmap != null) {
                     dynamicImage[forKey] = bitmap
                 }
