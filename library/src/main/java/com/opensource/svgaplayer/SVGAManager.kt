@@ -55,6 +55,7 @@ object SVGAManager {
     /**
      * 低内存时释放缓存
      */
+    @JvmStatic
     fun onLowMemory() {
         SVGAMemoryCache.INSTANCE.clear()
         SVGABitmapCache.INSTANCE.clear()
@@ -63,6 +64,7 @@ object SVGAManager {
     /**
      * 清除缓存
      */
+    @JvmStatic
     fun clearCache() {
         SVGAMemoryCache.INSTANCE.clear()
         SVGABitmapCache.INSTANCE.clear()

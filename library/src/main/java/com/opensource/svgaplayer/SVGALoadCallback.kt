@@ -1,39 +1,39 @@
 package com.opensource.svgaplayer
 
-import java.lang.ref.WeakReference
+import android.view.View
 
-typealias SVGADynamicCallback = (SVGAVideoEntity) -> SVGADynamicEntity?
 
 /** 简易调用 */
 open class SVGASimpleCallback : SVGAParser.ParseCompletion {
+
     override fun onComplete(videoItem: SVGAVideoEntity) {}
 
     override fun onError() {}
 }
 
-/** 循环播放
- * @param loopCount 循环次数 0 为无限循环
- * */
-open class SVGAPlayCallback(
-    view: SVGAImageView?,
-    private val loopCount: Int = 0,
-    dynamicCallback: SVGADynamicCallback? = null
-) : SVGAParser.ParseCompletion {
+class SVGAViewLoadCallback(private var svgaImageView: SVGAImageView?) : SVGASimpleCallback(),
+    View.OnAttachStateChangeListener {
 
-    private val view = WeakReference(view)
-    private val dynamicCallback = WeakReference(dynamicCallback)
+    init {
+        svgaImageView?.addOnAttachStateChangeListener(this)
+    }
+
     override fun onComplete(videoItem: SVGAVideoEntity) {
-        view.get()?.takeIf { it.isAttachedToWindow }?.apply {
-            clearsAfterDetached = true
-            loops = loopCount
-            setVideoItem(videoItem, dynamicCallback.get()?.invoke(videoItem))
-            startAnimation()
-        }
+        svgaImageView?.startAnimation(videoItem)
+        svgaImageView = null
     }
 
     override fun onError() {
-        view.get()?.takeIf { it.isAttachedToWindow }?.apply {
-            clear()
+        svgaImageView?.let {
+            it::onError.invoke()
         }
+    }
+
+    override fun onViewAttachedToWindow(v: View?) {
+    }
+
+    override fun onViewDetachedFromWindow(v: View?) {
+        svgaImageView?.removeOnAttachStateChangeListener(this)
+        svgaImageView = null
     }
 }

@@ -9,13 +9,13 @@ import android.support.v7.app.AppCompatActivity;
 import android.view.Gravity;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.Button;
 import android.widget.LinearLayout;
 import android.widget.ListAdapter;
 import android.widget.ListView;
 import android.widget.TextView;
 
-import com.opensource.svgaplayer.SVGAParser;
-import com.opensource.svgaplayer.utils.log.SVGALogger;
+import com.opensource.svgaplayer.SVGAManager;
 
 import java.util.ArrayList;
 
@@ -31,19 +31,21 @@ class SampleItem {
 
 }
 
-public class MainActivity extends AppCompatActivity {
+public class MainActivity extends AppCompatActivity implements View.OnClickListener {
 
     ListView listView;
-    ArrayList<SampleItem> items = new ArrayList();
+    Button button;
+    ArrayList<SampleItem> items = new ArrayList<>();
 
     @Override
     protected void onCreate(@Nullable Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        setContentView(R.layout.activity_main);
+        listView = findViewById(R.id.listView);
+        button = findViewById(R.id.btn_clear_cache);
+        button.setOnClickListener(this);
         this.setupData();
         this.setupListView();
-        this.setupSVGAParser();
-        this.setupLogger();
-        setContentView(listView);
     }
 
     void setupData() {
@@ -59,7 +61,6 @@ public class MainActivity extends AppCompatActivity {
     }
 
     void setupListView() {
-        this.listView = new ListView(this);
         this.listView.setAdapter(new ListAdapter() {
             @Override
             public boolean areAllItemsEnabled() {
@@ -136,12 +137,10 @@ public class MainActivity extends AppCompatActivity {
         this.listView.setBackgroundColor(Color.WHITE);
     }
 
-    void setupSVGAParser() {
-        //SVGAParser.shareParser().init(this);
+    @Override
+    public void onClick(View v) {
+        if (v.getId() == R.id.btn_clear_cache) {
+            SVGAManager.clearCache();
+        }
     }
-
-    private void setupLogger() {
-        SVGALogger.INSTANCE.setLogEnabled(true);
-    }
-
 }

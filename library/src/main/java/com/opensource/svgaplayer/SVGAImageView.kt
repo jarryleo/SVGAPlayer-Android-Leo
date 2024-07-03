@@ -62,7 +62,7 @@ open class SVGAImageView @JvmOverloads constructor(
     private var lastSource: String? = null
     private var loadJob: Job? = null
     private var dynamicBlock: (SVGADynamicEntity.() -> Unit)? = {}
-    private var onError: ((SVGAImageView) -> Unit)? = {}
+    internal var onError: ((SVGAImageView) -> Unit)? = {}
 
     init {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.JELLY_BEAN_MR2) {
@@ -126,7 +126,6 @@ open class SVGAImageView @JvmOverloads constructor(
         if (source.isNullOrEmpty()) return
         //设置动画属性
         loops = config?.loopCount ?: 0
-        val refImgView = WeakReference<SVGAImageView>(this)
         val parser = SVGAParser.shareParser()
         if (source.startsWith("http://") || source.startsWith("https://")) {
             val url = try {
@@ -138,30 +137,18 @@ open class SVGAImageView @JvmOverloads constructor(
             loadJob = parser.decodeFromURL(
                 url,
                 config = config ?: SVGAConfig(frameWidth = width, frameHeight = height),
-                createParseCompletion(refImgView)
+                SVGAViewLoadCallback(this)
             )
         } else {
             loadJob = parser.decodeFromAssets(
                 source,
                 config = config ?: SVGAConfig(frameWidth = width, frameHeight = height),
-                createParseCompletion(refImgView)
+                SVGAViewLoadCallback(this)
             )
         }
     }
 
-    private fun createParseCompletion(ref: WeakReference<SVGAImageView>): SVGAParser.ParseCompletion {
-        return object : SVGAParser.ParseCompletion {
-            override fun onComplete(videoItem: SVGAVideoEntity) {
-                ref.get()?.startAnimation(videoItem)
-            }
-
-            override fun onError() {
-                ref.get()?.onError
-            }
-        }
-    }
-
-    private fun startAnimation(videoItem: SVGAVideoEntity) {
+    fun startAnimation(videoItem: SVGAVideoEntity) {
         post {
             videoItem.antiAlias = mAntiAlias
             val dynamicItem = SVGADynamicEntity()
