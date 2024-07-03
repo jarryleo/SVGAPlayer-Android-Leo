@@ -100,6 +100,7 @@ class SVGADynamicEntity {
         val textPaint = TextPaint(Paint.ANTI_ALIAS_FLAG)
         textPaint.color = textEntity.textColor
         textPaint.textSize = textEntity.textSize
+        textPaint.typeface = textEntity.typeface
         val text = textEntity.text
         val width = if (textEntity.ellipsize == TextUtils.TruncateAt.MARQUEE) {
             textPaint.measureText(text).roundToInt()

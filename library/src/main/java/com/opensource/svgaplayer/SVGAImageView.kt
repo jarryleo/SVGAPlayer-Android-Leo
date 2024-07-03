@@ -20,7 +20,7 @@ import java.net.URLDecoder
 /**
  * Created by PonyCui on 2017/3/29.
  */
-class SVGAImageView @JvmOverloads constructor(
+open class SVGAImageView @JvmOverloads constructor(
     context: Context,
     attrs: AttributeSet? = null,
     defStyleAttr: Int = 0
