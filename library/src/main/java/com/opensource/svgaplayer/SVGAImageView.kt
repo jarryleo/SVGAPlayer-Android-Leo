@@ -14,14 +14,13 @@ import android.widget.ImageView
 import com.opensource.svgaplayer.utils.SVGARange
 import com.opensource.svgaplayer.utils.log.LogUtils
 import kotlinx.coroutines.Job
-import java.lang.ref.WeakReference
 import java.net.URL
 import java.net.URLDecoder
 
 /**
  * Created by PonyCui on 2017/3/29.
  */
-open class SVGAImageView @JvmOverloads constructor(
+class SVGAImageView @JvmOverloads constructor(
     context: Context,
     attrs: AttributeSet? = null,
     defStyleAttr: Int = 0
@@ -231,6 +230,7 @@ open class SVGAImageView @JvmOverloads constructor(
 
     private fun onAnimatorUpdate(animator: ValueAnimator?) {
         val drawable = getSVGADrawable() ?: return
+        if (!isVisible()) return
         drawable.currentFrame = animator?.animatedValue as Int
         val percentage =
             (drawable.currentFrame + 1).toDouble() / drawable.videoItem.frames.toDouble()
@@ -268,6 +268,19 @@ open class SVGAImageView @JvmOverloads constructor(
         setImageDrawable(null)
         loadJob?.cancel()
         loadJob = null
+    }
+
+    override fun onVisibilityChanged(changedView: View, visibility: Int) {
+        super.onVisibilityChanged(changedView, visibility)
+        if (visibility == VISIBLE) {
+            if (isAnimating) {
+                resumeAnimation()
+            }
+        } else {
+            if (isAnimating) {
+                pauseAnimation()
+            }
+        }
     }
 
     private fun isVisible(): Boolean {
@@ -400,33 +413,31 @@ open class SVGAImageView @JvmOverloads constructor(
         return true
     }
 
-    private class AnimatorListener(view: SVGAImageView) : Animator.AnimatorListener {
-        private val weakReference = WeakReference<SVGAImageView>(view)
+    private class AnimatorListener(val view: SVGAImageView) : Animator.AnimatorListener {
 
         override fun onAnimationRepeat(animation: Animator) {
-            weakReference.get()?.callback?.onRepeat()
+            view.callback?.onRepeat()
         }
 
         override fun onAnimationEnd(animation: Animator) {
-            weakReference.get()?.onAnimationEnd(animation)
+            view.onAnimationEnd(animation)
         }
 
         override fun onAnimationCancel(animation: Animator) {
-            weakReference.get()?.isAnimating = false
+            view.isAnimating = false
         }
 
         override fun onAnimationStart(animation: Animator) {
-            weakReference.get()?.isAnimating = true
+            view.isAnimating = true
         }
     } // end of AnimatorListener
 
 
-    private class AnimatorUpdateListener(view: SVGAImageView) :
+    private class AnimatorUpdateListener(val view: SVGAImageView) :
         ValueAnimator.AnimatorUpdateListener {
-        private val weakReference = WeakReference<SVGAImageView>(view)
 
         override fun onAnimationUpdate(animation: ValueAnimator) {
-            weakReference.get()?.onAnimatorUpdate(animation)
+            view.onAnimatorUpdate(animation)
         }
     } // end of AnimatorUpdateListener
 }
