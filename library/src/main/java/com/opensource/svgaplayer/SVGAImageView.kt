@@ -439,9 +439,7 @@ open class SVGAImageView @JvmOverloads constructor(
 
     override fun onLayout(changed: Boolean, left: Int, top: Int, right: Int, bottom: Int) {
         super.onLayout(changed, left, top, right, bottom)
-        LogUtils.debug(TAG, "onLayout: $changed ，width = $width, height = $height")
         if (changed && width > 0 && height > 0 && lastSource != null) {
-            LogUtils.debug(TAG, "onLayout: lastSource = $lastSource")
             parserSource(lastSource)
         }
     }

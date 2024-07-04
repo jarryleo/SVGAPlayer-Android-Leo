@@ -21,7 +21,7 @@ object SVGAManager {
     @JvmStatic
     fun init(
         context: Context,
-        memoryCacheCount: Int = 8,
+        memoryCacheCount: Int = 16,
         httpCacheSize: Long = (256 * 1024 * 1024).toLong(),
         logEnabled: Boolean = BuildConfig.DEBUG,
         loggerProxy: ILogger? = null,

@@ -64,8 +64,13 @@ class SVGADynamicEntity {
     }
 
     fun requestImage(forKey: String, width: Int, height: Int): Bitmap? {
-        if (dynamicImage[forKey] != null) {
-            return dynamicImage[forKey]
+        val value = dynamicImage[forKey]
+        if (value != null) {
+            if (!value.isRecycled) {
+                return value
+            } else {
+                dynamicImage.remove(forKey)
+            }
         }
         val url = dynamicImageUrl[forKey]
         if (url != null) {
@@ -82,19 +87,19 @@ class SVGADynamicEntity {
 
     fun setDynamicText(text: String, textPaint: TextPaint, forKey: String) {
         this.isTextDirty = true
-        this.dynamicText.put(forKey, text)
-        this.dynamicTextPaint.put(forKey, textPaint)
+        this.dynamicText[forKey] = text
+        this.dynamicTextPaint[forKey] = textPaint
     }
 
     fun setDynamicText(layoutText: StaticLayout, forKey: String) {
         this.isTextDirty = true
-        this.dynamicStaticLayoutText.put(forKey, layoutText)
+        this.dynamicStaticLayoutText[forKey] = layoutText
     }
 
     fun setDynamicText(layoutText: BoringLayout, forKey: String) {
         this.isTextDirty = true
         BoringLayout.isBoring(layoutText.text, layoutText.paint)?.let {
-            this.dynamicBoringLayoutText.put(forKey, layoutText)
+            this.dynamicBoringLayoutText[forKey] = layoutText
         }
     }
 
@@ -149,7 +154,7 @@ class SVGADynamicEntity {
                 override fun onResponseArea(key: String, x0: Int, y0: Int, x1: Int, y1: Int) {
                     mClickMap.let {
                         if (it[key] == null) {
-                            it.put(key, intArrayOf(x0, y0, x1, y1))
+                            it[key] = intArrayOf(x0, y0, x1, y1)
                         } else {
                             it[key]?.let { arr ->
                                 arr[0] = x0
@@ -165,13 +170,13 @@ class SVGADynamicEntity {
     }
 
     fun setClickArea(clickKey: String) {
-        dynamicIClickArea.put(clickKey, object : IClickAreaListener {
+        dynamicIClickArea[clickKey] = object : IClickAreaListener {
             override fun onResponseArea(key: String, x0: Int, y0: Int, x1: Int, y1: Int) {
-                mClickMap.let {
-                    if (it.get(key) == null) {
-                        it.put(key, intArrayOf(x0, y0, x1, y1))
+                mClickMap.let { clickKey ->
+                    if (clickKey[key] == null) {
+                        clickKey[key] = intArrayOf(x0, y0, x1, y1)
                     } else {
-                        it.get(key)?.let {
+                        clickKey[key]?.let {
                             it[0] = x0
                             it[1] = y0
                             it[2] = x1
@@ -180,7 +185,7 @@ class SVGADynamicEntity {
                     }
                 }
             }
-        })
+        }
     }
 
     fun setDynamicDrawerSized(
@@ -201,6 +206,7 @@ class SVGADynamicEntity {
             }
         }
         this.dynamicImage.clear()
+        this.dynamicImageUrl.clear()
         this.dynamicText.clear()
         this.dynamicTextPaint.clear()
         this.dynamicStaticLayoutText.clear()
