@@ -61,6 +61,7 @@ open class SVGAImageView @JvmOverloads constructor(
     private var mEndFrame = 0
 
     private var lastSource: String? = null
+    private var loadingSource: String? = null
     private var lastConfig: SVGAConfig? = null
     private var loadJob: Job? = null
     private var dynamicBlock: (SVGADynamicEntity.() -> Unit)? = {}
@@ -158,12 +159,24 @@ open class SVGAImageView @JvmOverloads constructor(
                 onError?.invoke(this)
                 return
             }
+            if (loadingSource == realUrl) {
+                return
+            }
+            loadingSource = realUrl
+            clear()
+            LogUtils.debug(TAG, "load from url: $realUrl , last source: $lastSource")
             loadJob = parser.decodeFromURL(
                 url,
                 config = cfg ?: SVGAConfig(frameWidth = width, frameHeight = height),
                 SVGAViewLoadCallback(this)
             )
         } else {
+            if (loadingSource == realUrl) {
+                return
+            }
+            loadingSource = realUrl
+            clear()
+            LogUtils.debug(TAG, "load from assert: $realUrl , last source: $lastSource")
             loadJob = parser.decodeFromAssets(
                 realUrl,
                 config = cfg ?: SVGAConfig(frameWidth = width, frameHeight = height),
@@ -195,6 +208,7 @@ open class SVGAImageView @JvmOverloads constructor(
     }
 
     private fun play(range: SVGARange?, reverse: Boolean) {
+        if (isAnimating) return
         LogUtils.info(TAG, "================ start animation ================")
         val drawable = getSVGADrawable() ?: return
         setupDrawable()
@@ -263,6 +277,7 @@ open class SVGAImageView @JvmOverloads constructor(
     }
 
     fun onAnimationStart(animation: Animator?) {
+        loadingSource = null
         isAnimating = true
         callback?.onStart()
     }
@@ -301,8 +316,9 @@ open class SVGAImageView @JvmOverloads constructor(
         getSVGADrawable()?.dynamicItem?.clearDynamicObjects()
         // 清除对 drawable 的引用
         setImageDrawable(null)
-        loadJob?.cancel()
+        if (loadJob?.isActive == true) loadJob?.cancel()
         loadJob = null
+        LogUtils.debug(TAG, "clear last source: $lastSource")
     }
 
     override fun onVisibilityChanged(changedView: View, visibility: Int) {
@@ -425,8 +441,7 @@ open class SVGAImageView @JvmOverloads constructor(
 
     override fun onAttachedToWindow() {
         super.onAttachedToWindow()
-        val andPlay = loops <= 0 && !clearsAfterDetached
-        stepToFrame(0, andPlay)
+        stepToFrame(0, true)
     }
 
     override fun onDetachedFromWindow() {
