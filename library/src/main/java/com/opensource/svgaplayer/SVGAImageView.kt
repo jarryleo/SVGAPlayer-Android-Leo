@@ -20,6 +20,7 @@ import java.net.URLDecoder
 
 /**
  * Created by PonyCui on 2017/3/29.
+ * Modified by leo on 2024/7/1.
  */
 open class SVGAImageView @JvmOverloads constructor(
     context: Context,
@@ -109,14 +110,18 @@ open class SVGAImageView @JvmOverloads constructor(
         onError: ((SVGAImageView) -> Unit)? = {},
         dynamicBlock: (SVGADynamicEntity.() -> Unit)? = {}
     ): SVGAImageView {
+        this.visibility = View.VISIBLE
         this.dynamicBlock = dynamicBlock
         this.onError = onError
-        if (source.isNullOrEmpty()) return this
         if (isReplayDrawable(source)) {
             return this
         }
         lastSource = source
         lastConfig = config
+        if (source.isNullOrEmpty()) {
+            stopAnimation()
+            return this
+        }
         //已有宽高才加载动画
         if (width > 0 && height > 0) {
             parserSource(source, config)
@@ -140,10 +145,17 @@ open class SVGAImageView @JvmOverloads constructor(
             urlDecoder.decodeSvgaUrl(source, cfg?.frameWidth ?: width, cfg?.frameHeight ?: height)
         val parser = SVGAParser.shareParser()
         if (realUrl.startsWith("http://") || realUrl.startsWith("https://")) {
-            val url = try {
-                URL(URLDecoder.decode(realUrl, "UTF-8"))
+            val decode = try {
+                URLDecoder.decode(realUrl, "UTF-8")
             } catch (e: Exception) {
                 e.printStackTrace()
+                realUrl
+            }
+            val url = try {
+                URL(decode)
+            } catch (e: Exception) {
+                e.printStackTrace()
+                onError?.invoke(this)
                 return
             }
             loadJob = parser.decodeFromURL(
@@ -250,6 +262,16 @@ open class SVGAImageView @JvmOverloads constructor(
         callback?.onStep(drawable.currentFrame, percentage)
     }
 
+    fun onAnimationStart(animation: Animator?) {
+        isAnimating = true
+        callback?.onStart()
+    }
+
+    fun onAnimationCancel(animation: Animator?) {
+        isAnimating = false
+        callback?.onCancel()
+    }
+
     private fun onAnimationEnd(animation: Animator?) {
         isAnimating = false
         stopAnimation()
@@ -345,7 +367,15 @@ open class SVGAImageView @JvmOverloads constructor(
 
     fun stepToFrame(frame: Int, andPlay: Boolean) {
         stopAnimation(false)
-        val drawable = getSVGADrawable() ?: return
+        val drawable = getSVGADrawable()
+        if (drawable == null) {
+            if (width > 0 && height > 0) {
+                lastSource?.let {
+                    parserSource(it)
+                }
+            }
+            return
+        }
         drawable.currentFrame = frame
         if (andPlay) {
             startAnimation()
@@ -378,7 +408,11 @@ open class SVGAImageView @JvmOverloads constructor(
         val drawable = getSVGADrawable() ?: return super.onTouchEvent(event)
         drawable.dynamicItem?.mClickMap?.apply {
             for ((key, value) in this) {
-                if (event.x >= value[0] && event.x <= value[2] && event.y >= value[1] && event.y <= value[3]) {
+                if (event.x >= value[0]
+                    && event.x <= value[2]
+                    && event.y >= value[1]
+                    && event.y <= value[3]
+                ) {
                     mItemClickAreaListener?.let {
                         it.onClick(key)
                         return true
@@ -386,14 +420,13 @@ open class SVGAImageView @JvmOverloads constructor(
                 }
             }
         }
-
-
         return super.onTouchEvent(event)
     }
 
     override fun onAttachedToWindow() {
         super.onAttachedToWindow()
-        stepToFrame(0, loops <= 0 && !clearsAfterDetached)
+        val andPlay = loops <= 0 && !clearsAfterDetached
+        stepToFrame(0, andPlay)
     }
 
     override fun onDetachedFromWindow() {
@@ -407,15 +440,16 @@ open class SVGAImageView @JvmOverloads constructor(
     override fun onLayout(changed: Boolean, left: Int, top: Int, right: Int, bottom: Int) {
         super.onLayout(changed, left, top, right, bottom)
         LogUtils.debug(TAG, "onLayout: $changed ，width = $width, height = $height")
-        if (changed) {
+        if (changed && width > 0 && height > 0 && lastSource != null) {
+            LogUtils.debug(TAG, "onLayout: lastSource = $lastSource")
             parserSource(lastSource)
         }
     }
 
     /** 判断是否重新播放原有资源，true：重新播放 */
-    private fun isReplayDrawable(source: String): Boolean {
+    private fun isReplayDrawable(source: String?): Boolean {
         //对比上次加载的资源地址
-        if (lastSource != source) return false
+        if (lastSource != source || source.isNullOrEmpty()) return false
         //获取原有drawable
         val drawable = drawable as? SVGADrawable ?: return false
         //存在dynamicItem，因为可能前后两次存在差异，需要重新加载数据
@@ -437,11 +471,11 @@ open class SVGAImageView @JvmOverloads constructor(
         }
 
         override fun onAnimationCancel(animation: Animator) {
-            view.isAnimating = false
+            view.onAnimationCancel(animation)
         }
 
         override fun onAnimationStart(animation: Animator) {
-            view.isAnimating = true
+            view.onAnimationStart(animation)
         }
     } // end of AnimatorListener
 

@@ -25,15 +25,18 @@ class SVGAViewLoadCallback(private var svgaImageView: SVGAImageView?) : SVGASimp
 
     override fun onError() {
         svgaImageView?.let {
-            it::onError.invoke()
+            it.onError?.invoke(it)
         }
-    }
-
-    override fun onViewAttachedToWindow(v: View?) {
-    }
-
-    override fun onViewDetachedFromWindow(v: View?) {
-        svgaImageView?.removeOnAttachStateChangeListener(this)
         svgaImageView = null
+    }
+
+    override fun onViewAttachedToWindow(v: View) {
+    }
+
+    override fun onViewDetachedFromWindow(v: View) {
+        if (v == svgaImageView) {
+            svgaImageView?.removeOnAttachStateChangeListener(this)
+            svgaImageView = null
+        }
     }
 }

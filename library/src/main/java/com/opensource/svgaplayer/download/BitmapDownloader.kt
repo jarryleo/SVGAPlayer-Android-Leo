@@ -44,8 +44,14 @@ object BitmapDownloader {
         downLoadQueue.add(url)
         val bitmap = withTimeoutOrNull(30_000) {
             suspendCoroutine {
+                val decode = try {
+                    URLDecoder.decode(url, "UTF-8")
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                    url
+                }
                 val urlSafe = try {
-                    URL(URLDecoder.decode(url, "UTF-8"))
+                    URL(URLDecoder.decode(decode, "UTF-8"))
                 } catch (e: Exception) {
                     e.printStackTrace()
                     it.resume(null)
