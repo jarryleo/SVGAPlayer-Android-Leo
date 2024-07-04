@@ -430,7 +430,11 @@ internal class SVGACanvasDrawer(
                     textBitmap = bitmap
                     val textCanvas = Canvas(bitmap)
                     val scale = drawingBitmap.height / layout.height.toFloat()
-                    textCanvas.scale(1f, scale)
+                    if (scale < 5f){
+                        textCanvas.scale(1f, scale)
+                    }else{
+                        textCanvas.translate(0f, ((drawingBitmap.height - layout.height) / 2).toFloat())
+                    }
                     layout.draw(textCanvas)
                     drawTextCache[imageKey] = bitmap
                 }
