@@ -12,6 +12,7 @@ import com.opensource.svgaplayer.coroutine.SvgaCoroutineManager
 import com.opensource.svgaplayer.download.BitmapDownloader
 import com.opensource.svgaplayer.entities.SVGATextEntity
 import com.opensource.svgaplayer.url.UrlDecoderManager
+import kotlinx.coroutines.Job
 import kotlin.math.roundToInt
 
 /**
@@ -24,6 +25,8 @@ class SVGADynamicEntity {
     private var dynamicImage: HashMap<String, Bitmap> = hashMapOf()
 
     private var dynamicImageUrl: HashMap<String, String> = hashMapOf()
+
+    private var dynamicImageJob: HashMap<String, Job> = hashMapOf()
 
     internal var dynamicText: HashMap<String, String> = hashMapOf()
 
@@ -75,13 +78,22 @@ class SVGADynamicEntity {
         }
         val url = dynamicImageUrl[forKey]
         if (url != null) {
+            dynamicImageJob[forKey]?.let {
+                if (it.isActive) {
+                    return null
+                }else{
+                    dynamicImageJob.remove(forKey)
+                }
+            }
             val realUrl = UrlDecoderManager.getUrlDecoder().decodeImageUrl(url, width, height)
-            SvgaCoroutineManager.launchIo {
+            val job = SvgaCoroutineManager.launchIo {
                 val bitmap = BitmapDownloader.downloadBitmap(realUrl, width, height)
                 if (bitmap != null) {
                     dynamicImage[forKey] = bitmap
+                    dynamicImageJob.remove(forKey)
                 }
             }
+            dynamicImageJob[forKey] = job
         }
         return null
     }
