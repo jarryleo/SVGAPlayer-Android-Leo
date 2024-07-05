@@ -220,6 +220,12 @@ class SVGADynamicEntity {
         }
         this.dynamicImage.clear()
         this.dynamicImageUrl.clear()
+        this.dynamicImageJob.forEach {
+            if (it.value.isActive) {
+                it.value.cancel()
+            }
+        }
+        this.dynamicImageJob.clear()
         this.dynamicText.clear()
         this.dynamicTextPaint.clear()
         this.dynamicStaticLayoutText.clear()
