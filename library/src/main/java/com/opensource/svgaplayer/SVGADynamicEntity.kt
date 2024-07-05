@@ -46,13 +46,14 @@ class SVGADynamicEntity {
     internal var isTextDirty = false
 
     /** 判断是否由SVGA内部自动释放Bitmap（使用Glide时候如果SVGA内部释放掉Bitmap会造成崩溃） */
-    var isAutoRecycleBitmap = true
+    private var isAutoRecycleBitmap = true
 
     fun setHidden(value: Boolean, forKey: String) {
         this.dynamicHidden[forKey] = value
     }
 
     fun setDynamicImage(bitmap: Bitmap, forKey: String) {
+        isAutoRecycleBitmap = false //外部设置的bitmap不自动释放
         this.dynamicImage[forKey] = bitmap
     }
 
