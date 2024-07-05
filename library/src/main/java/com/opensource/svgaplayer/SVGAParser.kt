@@ -194,12 +194,12 @@ class SVGAParser private constructor(context: Context) {
         alias: String? = null
     ) {
         SvgaCoroutineManager.launchIo {
+            val svgaFile = SVGAFileCache.buildCacheFile(cacheKey)
             try {
                 LogUtils.info(
                     TAG,
                     "================ decode $alias from svga cachel file to entity ================"
                 )
-                val svgaFile = SVGAFileCache.buildCacheFile(cacheKey)
                 FileInputStream(svgaFile).use { inputStream ->
                     //检查是否是zip文件
                     val magicCode = ByteArray(4)
@@ -233,7 +233,8 @@ class SVGAParser private constructor(context: Context) {
                         }, playCallback)
                     }
                 }
-            } catch (e: java.lang.Exception) {
+            } catch (e: Exception) {
+                svgaFile.delete() //解码失败删除文件，否则一直失败
                 invokeErrorCallback(e, callback, alias)
             } finally {
                 LogUtils.info(
