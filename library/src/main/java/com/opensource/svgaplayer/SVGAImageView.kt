@@ -134,6 +134,7 @@ open class SVGAImageView @JvmOverloads constructor(
         if (source.isNullOrEmpty()) return
         //设置动画属性
         loops = config?.loopCount ?: 0
+        mAutoPlay = config?.autoPlay ?: true
         var cfg = config
         if (cfg != null && !cfg.isOriginal) {
             cfg = cfg.copy(
@@ -209,8 +210,8 @@ open class SVGAImageView @JvmOverloads constructor(
 
     private fun play(range: SVGARange?, reverse: Boolean) {
         if (isAnimating) return
-        LogUtils.info(TAG, "================ start animation ================")
         val drawable = getSVGADrawable() ?: return
+        LogUtils.info(TAG, "================ start animation ================")
         setupDrawable()
         mStartFrame = 0.coerceAtLeast(range?.location ?: 0)
         val videoItem = drawable.videoItem
@@ -441,7 +442,7 @@ open class SVGAImageView @JvmOverloads constructor(
 
     override fun onAttachedToWindow() {
         super.onAttachedToWindow()
-        stepToFrame(0, true)
+        stepToFrame(0, lastConfig?.autoPlay == true)
     }
 
     override fun onDetachedFromWindow() {

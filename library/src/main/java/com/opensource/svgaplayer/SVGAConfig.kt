@@ -24,6 +24,10 @@ data class SVGAConfig(
      */
     val isOriginal: Boolean = false,
     /**
+     * 是否自动播放
+     */
+    val autoPlay: Boolean = true,
+    /**
      * 循环次数，若小于等于0为无限循环
      */
     val loopCount: Int = -1,
