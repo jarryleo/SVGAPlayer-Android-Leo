@@ -49,6 +49,7 @@ open class FileDownloader {
 
                 (url.openConnection() as? HttpURLConnection)?.let {
                     it.connectTimeout = TIMEOUT
+                    it.readTimeout = TIMEOUT
                     it.requestMethod = "GET"
                     it.setRequestProperty("Connection", "close")
                     it.connect()

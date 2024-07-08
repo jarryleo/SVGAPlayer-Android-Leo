@@ -29,8 +29,11 @@ object SVGAManager {
         threadPoolExecutor: ThreadPoolExecutor? = null
     ) {
         try {
-            val cacheDir = File(context.cacheDir, "http")
-            HttpResponseCache.install(cacheDir, httpCacheSize)
+            val installed = HttpResponseCache.getInstalled()
+            if (installed == null) {
+                val cacheDir = File(context.cacheDir, "http")
+                HttpResponseCache.install(cacheDir, httpCacheSize)
+            }
         } catch (e: Exception) {
             e.printStackTrace()
         }

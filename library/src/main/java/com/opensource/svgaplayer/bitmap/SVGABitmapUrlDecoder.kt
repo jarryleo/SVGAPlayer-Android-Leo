@@ -18,6 +18,7 @@ internal object SVGABitmapUrlDecoder : SVGABitmapDecoder<URL>() {
                 connection.connectTimeout = TIMEOUT
                 connection.readTimeout = TIMEOUT
                 connection.requestMethod = "GET"
+                connection.setRequestProperty("Connection", "close")
                 connection.connect()
                 connection.inputStream.use { stream ->
                     return BitmapFactory.decodeStream(stream, null, ops)
