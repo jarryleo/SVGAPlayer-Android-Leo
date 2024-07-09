@@ -1,5 +1,6 @@
 package com.opensource.svgaplayer
 
+import android.annotation.SuppressLint
 import android.content.Context
 import android.os.Handler
 import android.os.Looper
@@ -23,7 +24,6 @@ import java.net.URL
 import java.util.concurrent.ThreadPoolExecutor
 import java.util.zip.InflaterInputStream
 import java.util.zip.ZipInputStream
-import kotlin.properties.Delegates
 
 /**
  * Created by PonyCui 16/6/18.
@@ -49,7 +49,8 @@ class SVGAParser private constructor(context: Context) {
     companion object {
         const val TAG = "SVGAParser"
 
-        private var mShareParser by Delegates.notNull<SVGAParser>()
+        @SuppressLint("StaticFieldLeak")
+        private var mShareParser: SVGAParser? = null
 
         @JvmStatic
         fun setThreadPoolExecutor(executor: ThreadPoolExecutor) {
@@ -57,12 +58,14 @@ class SVGAParser private constructor(context: Context) {
         }
 
         @JvmStatic
-        fun shareParser(): SVGAParser {
+        fun shareParser(): SVGAParser? {
             return mShareParser
         }
 
         fun init(context: Context) {
-            mShareParser = SVGAParser(context)
+            if (mShareParser == null) {
+                mShareParser = SVGAParser(context)
+            }
         }
     }
 

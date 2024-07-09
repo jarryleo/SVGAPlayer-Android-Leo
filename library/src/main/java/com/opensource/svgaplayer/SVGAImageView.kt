@@ -121,11 +121,14 @@ open class SVGAImageView @JvmOverloads constructor(
         lastConfig = config
         if (source.isNullOrEmpty()) {
             stopAnimation()
+            onError?.invoke(this)
             return this
         }
         //已有宽高才加载动画
         if (width > 0 && height > 0) {
             parserSource(source, config)
+        }else{
+            requestLayout()
         }
         return this
     }
@@ -160,25 +163,25 @@ open class SVGAImageView @JvmOverloads constructor(
                 onError?.invoke(this)
                 return
             }
-            if (loadingSource == realUrl) {
+            if (loadingSource == realUrl && loadJob?.isActive == true) {
                 return
             }
             loadingSource = realUrl
             clear()
             LogUtils.debug(TAG, "load from url: $realUrl , last source: $lastSource")
-            loadJob = parser.decodeFromURL(
+            loadJob = parser?.decodeFromURL(
                 url,
                 config = cfg ?: SVGAConfig(frameWidth = width, frameHeight = height),
                 SVGAViewLoadCallback(this)
             )
         } else {
-            if (loadingSource == realUrl) {
+            if (loadingSource == realUrl && loadJob?.isActive == true) {
                 return
             }
             loadingSource = realUrl
             clear()
             LogUtils.debug(TAG, "load from assert: $realUrl , last source: $lastSource")
-            loadJob = parser.decodeFromAssets(
+            loadJob = parser?.decodeFromAssets(
                 realUrl,
                 config = cfg ?: SVGAConfig(frameWidth = width, frameHeight = height),
                 SVGAViewLoadCallback(this)
@@ -211,7 +214,6 @@ open class SVGAImageView @JvmOverloads constructor(
     private fun play(range: SVGARange?, reverse: Boolean) {
         if (isAnimating) return
         val drawable = getSVGADrawable() ?: return
-        LogUtils.info(TAG, "================ start animation ================")
         setupDrawable()
         mStartFrame = 0.coerceAtLeast(range?.location ?: 0)
         val videoItem = drawable.videoItem
@@ -225,6 +227,10 @@ open class SVGAImageView @JvmOverloads constructor(
         animator.repeatCount = if (loops <= 0) ValueAnimator.INFINITE else loops - 1
         animator.addUpdateListener(mAnimatorUpdateListener)
         animator.addListener(mAnimatorListener)
+        LogUtils.info(
+            TAG, "================ start animation ================ " +
+                    "\r\n source: $lastSource" + "\r\n url: $loadingSource"
+        )
         if (reverse) {
             animator.reverse()
         } else {
@@ -472,6 +478,10 @@ open class SVGAImageView @JvmOverloads constructor(
         if (isAnimating) return false
         startAnimation()
         return true
+    }
+
+    fun getLastSource(): String? {
+        return lastSource
     }
 
     private class AnimatorListener(val view: SVGAImageView) : Animator.AnimatorListener {
