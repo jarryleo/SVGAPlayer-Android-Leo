@@ -30,6 +30,8 @@ class SVGADynamicEntity {
 
     internal var dynamicText: HashMap<String, String> = hashMapOf()
 
+    internal var dynamicTextScale: HashMap<String, Float> = hashMapOf()
+
     internal var dynamicTextPaint: HashMap<String, TextPaint> = hashMapOf()
 
     internal var dynamicStaticLayoutText: HashMap<String, StaticLayout> = hashMapOf()
@@ -81,7 +83,7 @@ class SVGADynamicEntity {
             dynamicImageJob[forKey]?.let {
                 if (it.isActive) {
                     return null
-                }else{
+                } else {
                     dynamicImageJob.remove(forKey)
                 }
             }
@@ -121,6 +123,7 @@ class SVGADynamicEntity {
         textPaint.color = textEntity.textColor
         textPaint.textSize = textEntity.textSize
         textPaint.typeface = textEntity.typeface
+        dynamicTextScale[forKey] = textEntity.scale
         val text = textEntity.text
         val width = if (textEntity.ellipsize == TextUtils.TruncateAt.MARQUEE) {
             textPaint.measureText(text).roundToInt()
@@ -227,6 +230,7 @@ class SVGADynamicEntity {
         }
         this.dynamicImageJob.clear()
         this.dynamicText.clear()
+        this.dynamicTextScale.clear()
         this.dynamicTextPaint.clear()
         this.dynamicStaticLayoutText.clear()
         this.dynamicBoringLayoutText.clear()

@@ -5,7 +5,6 @@ import android.graphics.Color
 import android.os.Build
 import android.os.Bundle
 import android.support.annotation.RequiresApi
-import android.util.Log
 import com.opensource.svgaplayer.SVGAImageView
 import com.opensource.svgaplayer.entities.SVGATextEntity
 import com.opensource.svgaplayer.utils.log.SVGALogger.setLogEnabled
@@ -29,15 +28,25 @@ class AnimationFromAssetsActivity : Activity() {
 
     @RequiresApi(api = Build.VERSION_CODES.M)
     private fun loadAnimation() {
-        val name = "custom_head_marquee.svga"
+        val name = "room_big_gift_level3.svga"
+        val textSize = 14.dp.toFloat()
         animationView.load(name) {
-            val nick = "nick:test MARQUEE 测试跑马灯"
-//            val nick = "خدمة متجر جوجل غير متوفرة"
+            val nick1 = "خدمة متجر جوجل غير متوفرة"
+            val nick2 = "FC0005"
             setDynamicText(
-                "NICK1",
-                SVGATextEntity(nick)
+                "name1",
+                SVGATextEntity(
+                    nick1,
+                    textSize,
+                )
+            )
+            setDynamicText(
+                "name2",
+                SVGATextEntity(
+                    nick2,
+                    textSize,
+                )
             )
         }
-        Log.d("SVGA", "## name $name")
     }
 }
