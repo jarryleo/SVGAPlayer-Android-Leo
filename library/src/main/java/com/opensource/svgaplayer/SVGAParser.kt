@@ -360,7 +360,7 @@ class SVGAParser private constructor(context: Context) {
     ) {
         e.printStackTrace()
         LogUtils.error(TAG, "================ $alias parser error ================")
-        LogUtils.error(TAG, "$alias parse error", e)
+        //LogUtils.error(TAG, "$alias parse error", e)
         handler.post {
             callback?.onError()
         }
