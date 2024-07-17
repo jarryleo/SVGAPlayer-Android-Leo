@@ -127,7 +127,7 @@ open class SVGAImageView @JvmOverloads constructor(
         //已有宽高才加载动画
         if (width > 0 && height > 0) {
             parserSource(source, config)
-        }else{
+        } else {
             requestLayout()
         }
         return this
@@ -148,7 +148,11 @@ open class SVGAImageView @JvmOverloads constructor(
         val urlDecoder = UrlDecoderManager.getUrlDecoder()
         val realUrl =
             urlDecoder.decodeSvgaUrl(source, cfg?.frameWidth ?: width, cfg?.frameHeight ?: height)
-        val parser = SVGAParser.shareParser()
+        var parser = SVGAParser.shareParser()
+        if (parser == null) {
+            SVGAParser.init(context.applicationContext)
+            parser = SVGAParser.shareParser()
+        }
         if (realUrl.startsWith("http://") || realUrl.startsWith("https://")) {
             val decode = try {
                 URLDecoder.decode(realUrl, "UTF-8")
