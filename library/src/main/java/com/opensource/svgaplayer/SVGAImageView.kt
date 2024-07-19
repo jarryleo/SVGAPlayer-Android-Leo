@@ -145,6 +145,7 @@ open class SVGAImageView @JvmOverloads constructor(
                 frameHeight = height
             )
         }
+        lastConfig = cfg
         val urlDecoder = UrlDecoderManager.getUrlDecoder()
         val realUrl =
             urlDecoder.decodeSvgaUrl(source, cfg?.frameWidth ?: width, cfg?.frameHeight ?: height)
@@ -452,7 +453,7 @@ open class SVGAImageView @JvmOverloads constructor(
 
     override fun onAttachedToWindow() {
         super.onAttachedToWindow()
-        stepToFrame(0, lastConfig?.autoPlay == true)
+        stepToFrame(0, lastConfig?.autoPlay ?: mAutoPlay)
     }
 
     override fun onDetachedFromWindow() {
