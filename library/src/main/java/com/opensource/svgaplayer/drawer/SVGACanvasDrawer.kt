@@ -443,7 +443,7 @@ internal class SVGACanvasDrawer(
                     val textCanvas = Canvas(bitmap)
                     val textScale = dynamicItem.dynamicTextScale[imageKey] ?: 1f
                     val scale = drawingBitmap.height / layout.height.toFloat() * textScale //内边距
-                    if (scale < 5f) {
+                    if (scale < 5f && layout.lineCount == 1) {
                         val tansX = -(layout.width * scale - drawingBitmap.width) / 2f
                         val tansY = -(layout.height * scale - drawingBitmap.height) / 2f
                         textCanvas.translate(tansX, tansY)

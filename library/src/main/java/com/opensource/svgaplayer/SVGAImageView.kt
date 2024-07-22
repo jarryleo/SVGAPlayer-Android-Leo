@@ -480,8 +480,9 @@ open class SVGAImageView @JvmOverloads constructor(
         //存在dynamicItem，因为可能前后两次存在差异，需要重新加载数据
         if (drawable.dynamicItem != null) return false
         //动画是否正在执行
-        if (isAnimating) return false
-        startAnimation()
+        if (!isAnimating) {
+            startAnimation()
+        }
         return true
     }
 
