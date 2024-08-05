@@ -6,6 +6,7 @@ import android.annotation.SuppressLint
 import android.content.Context
 import android.graphics.Rect
 import android.os.Build
+import android.text.format.Formatter
 import android.util.AttributeSet
 import android.view.MotionEvent
 import android.view.View
@@ -234,7 +235,9 @@ open class SVGAImageView @JvmOverloads constructor(
         animator.addListener(mAnimatorListener)
         LogUtils.info(
             TAG, "================ start animation ================ " +
-                    "\r\n source: $lastSource" + "\r\n url: $loadingSource"
+                    "\r\n source: $lastSource" +
+                    "\r\n url: $loadingSource" +
+                    "\r\n svgaMemorySize: ${getSvgaMemorySizeFormat()}(${getSvgaMemorySize()} Bytes)"
         )
         if (reverse) {
             animator.reverse()
@@ -242,6 +245,24 @@ open class SVGAImageView @JvmOverloads constructor(
             animator.start()
         }
         mAnimator = animator
+    }
+
+    /**
+     * 获取svga动画所占用的真实内存
+     */
+    fun getSvgaMemorySize(): Long {
+        val svgaMemorySize = getSVGADrawable()?.videoItem?.getMemorySize() ?: 0
+        val dynamicMemorySize = getSVGADrawable()?.dynamicItem?.getMemorySize() ?: 0
+        return svgaMemorySize + dynamicMemorySize
+    }
+
+    /**
+     * 获取svga动画所占用的内存格式化字符串
+     */
+    fun getSvgaMemorySizeFormat(): String {
+        //格式化动画占用内存字符串，显示详细的内存占用情况
+        val svgaMemorySize = getSvgaMemorySize()
+        return Formatter.formatFileSize(context, svgaMemorySize)
     }
 
     private fun setupDrawable() {

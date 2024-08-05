@@ -375,5 +375,14 @@ class SVGAVideoEntity {
     fun getMemoryCacheKey(): String? {
         return mMemoryCacheKey
     }
+
+    /**
+     * 获取svga主帧占用内存大小
+     */
+    fun getMemorySize(): Long {
+        return imageMap.values.sumOf {
+            it.width * it.height * 4
+        }.toLong()
+    }
 }
 

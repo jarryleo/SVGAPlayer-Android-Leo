@@ -239,4 +239,13 @@ class SVGADynamicEntity {
         this.mClickMap.clear()
         this.dynamicDrawerSized.clear()
     }
+
+    /**
+     * 获取svga动态图占用内存大小
+     */
+    fun getMemorySize(): Long {
+        return dynamicImage.values.sumOf {
+            it.width * it.height * 4
+        }.toLong()
+    }
 }
