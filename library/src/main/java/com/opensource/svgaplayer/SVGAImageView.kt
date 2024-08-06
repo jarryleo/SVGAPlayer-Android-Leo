@@ -65,7 +65,7 @@ open class SVGAImageView @JvmOverloads constructor(
     private var loadingSource: String? = null
     private var lastConfig: SVGAConfig? = null
     private var loadJob: Job? = null
-    private var dynamicBlock: (SVGADynamicEntity.() -> Unit)? = {}
+    private var dynamicBlock: (SVGADynamicEntity.() -> Unit)? = null
     internal var onError: ((SVGAImageView) -> Unit)? = {}
 
     init {
@@ -109,8 +109,8 @@ open class SVGAImageView @JvmOverloads constructor(
     fun load(
         source: String?,
         config: SVGAConfig? = null,
-        onError: ((SVGAImageView) -> Unit)? = {},
-        dynamicBlock: (SVGADynamicEntity.() -> Unit)? = {}
+        onError: ((SVGAImageView) -> Unit)? = null,
+        dynamicBlock: (SVGADynamicEntity.() -> Unit)? = null
     ): SVGAImageView {
         this.visibility = View.VISIBLE
         this.dynamicBlock = dynamicBlock
@@ -499,7 +499,7 @@ open class SVGAImageView @JvmOverloads constructor(
         //获取原有drawable
         val drawable = drawable as? SVGADrawable ?: return false
         //存在dynamicItem，因为可能前后两次存在差异，需要重新加载数据
-        if (drawable.dynamicItem != null) return false
+        if (drawable.dynamicItem != null && dynamicBlock != null) return false
         //动画是否正在执行
         if (!isAnimating) {
             startAnimation()
