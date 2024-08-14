@@ -325,6 +325,7 @@ open class SVGAImageView @JvmOverloads constructor(
         stopAnimation()
         val drawable = getSVGADrawable()
         if (drawable != null) {
+            drawable.unloadSound() //播放完一次后释放音频资源
             when (fillMode) {
                 FillMode.Backward -> {
                     drawable.currentFrame = mStartFrame

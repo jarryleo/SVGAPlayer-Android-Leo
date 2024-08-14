@@ -95,21 +95,28 @@ class SVGADrawable(
     }
 
     fun clear() {
-        videoItem.audioList.forEach { audio ->
-            audio.playID?.let {
-                if (SVGASoundManager.isInit()) {
-                    SVGASoundManager.stop(it)
-                } else {
-                    videoItem.soundPool?.stop(it)
-                }
-            }
-            audio.playID = null
-        }
+        unloadSound()
         //判断是否缓存数据
         videoItem.getMemoryCacheKey()?.apply {
             SVGAMemoryCache.INSTANCE.putData(this, videoItem)
         } ?: videoItem.clear()
         //清除绘制缓存
         drawer.clear()
+    }
+
+    /**
+     * 释放声音资源
+     */
+    fun unloadSound() {
+        videoItem.audioList.forEach { audio ->
+            audio.playID?.let {
+                if (SVGASoundManager.isInit()) {
+                    SVGASoundManager.unload(it)
+                } else {
+                    videoItem.soundPool?.unload(it)
+                }
+            }
+            audio.playID = null
+        }
     }
 }
