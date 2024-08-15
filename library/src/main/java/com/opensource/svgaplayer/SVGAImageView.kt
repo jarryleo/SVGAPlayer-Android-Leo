@@ -137,7 +137,7 @@ open class SVGAImageView @JvmOverloads constructor(
     private fun parserSource(source: String?, config: SVGAConfig? = lastConfig) {
         if (source.isNullOrEmpty()) return
         //设置动画属性
-        loops = config?.loopCount ?: 0
+        loops = config?.loopCount ?: loops
         mAutoPlay = config?.autoPlay ?: true
         var cfg = config
         if (cfg != null && !cfg.isOriginal) {
