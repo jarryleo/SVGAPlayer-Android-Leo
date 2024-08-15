@@ -355,6 +355,10 @@ open class SVGAImageView @JvmOverloads constructor(
         LogUtils.debug(TAG, "clear last source: $lastSource")
     }
 
+    fun clearLastSource() {
+        lastSource = null
+    }
+
     override fun onVisibilityChanged(changedView: View, visibility: Int) {
         super.onVisibilityChanged(changedView, visibility)
         if (visibility == VISIBLE) {
