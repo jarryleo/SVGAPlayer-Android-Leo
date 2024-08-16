@@ -61,11 +61,7 @@ class SVGADrawable(
     fun resume() {
         videoItem.audioList.forEach { audio ->
             audio.playID?.let {
-                if (SVGASoundManager.isInit()) {
-                    SVGASoundManager.resume(it)
-                } else {
-                    videoItem.soundPool?.resume(it)
-                }
+                videoItem.soundPool?.resume(it)
             }
         }
     }
@@ -73,11 +69,7 @@ class SVGADrawable(
     fun pause() {
         videoItem.audioList.forEach { audio ->
             audio.playID?.let {
-                if (SVGASoundManager.isInit()) {
-                    SVGASoundManager.pause(it)
-                } else {
-                    videoItem.soundPool?.pause(it)
-                }
+                videoItem.soundPool?.pause(it)
             }
         }
     }
@@ -85,11 +77,7 @@ class SVGADrawable(
     fun stop() {
         videoItem.audioList.forEach { audio ->
             audio.playID?.let {
-                if (SVGASoundManager.isInit()) {
-                    SVGASoundManager.stop(it)
-                } else {
-                    videoItem.soundPool?.stop(it)
-                }
+                videoItem.soundPool?.stop(it)
             }
         }
     }
@@ -110,11 +98,7 @@ class SVGADrawable(
     fun unloadSound() {
         videoItem.audioList.forEach { audio ->
             audio.playID?.let {
-                if (SVGASoundManager.isInit()) {
-                    SVGASoundManager.unload(it)
-                } else {
-                    videoItem.soundPool?.unload(it)
-                }
+                videoItem.soundPool?.unload(it)
             }
             audio.playID = null
         }

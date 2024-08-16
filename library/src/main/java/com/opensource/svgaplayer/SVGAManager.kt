@@ -58,8 +58,6 @@ object SVGAManager {
         loggerProxy?.let { logger ->
             SVGALogger.injectSVGALoggerImp(logger)
         }
-        //初始化声音管理
-        SVGASoundManager.init()
     }
 
     /**

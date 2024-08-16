@@ -42,7 +42,6 @@ class SVGAVideoEntity {
     internal var spriteList: List<SVGAVideoSpriteEntity> = emptyList()
     internal var audioList: List<SVGAAudioEntity> = emptyList()
     internal var soundPool: SoundPool? = null
-    private var soundCallback: SVGASoundManager.SVGASoundCallBack? = null
     internal var imageMap = HashMap<String, Bitmap>()
     private var mCacheDir: File
     private var mFrameHeight = 0
@@ -208,7 +207,7 @@ class SVGAVideoEntity {
     }
 
     private fun setupAudios(entity: MovieEntity, completionBlock: () -> Unit) {
-        if (entity.audios == null || entity.audios.isEmpty()) {
+        if (entity.audios.isNullOrEmpty()) {
             run(completionBlock)
             return
         }
@@ -216,7 +215,7 @@ class SVGAVideoEntity {
         val audiosFileMap = generateAudioFileMap(entity)
         //repair when audioEntity error can not callback
         //如果audiosFileMap为空 soundPool?.load 不会走 导致 setOnLoadCompleteListener 不会回调 导致外层prepare不回调卡住
-        if (audiosFileMap.size == 0) {
+        if (audiosFileMap.isEmpty()) {
             run(completionBlock)
             return
         }
@@ -247,22 +246,16 @@ class SVGAVideoEntity {
             return item
         }
 
-        audiosFileMap[audio.audioKey]?.let { file ->
-            FileInputStream(file).use {
-                val length = it.available().toDouble()
-                val offset = ((startTime / totalTime) * length).toLong()
-                if (SVGASoundManager.isInit()) {
-                    item.soundID = SVGASoundManager.load(
-                        soundCallback,
-                        it.fd,
-                        offset,
-                        length.toLong(),
-                        1
-                    )
-                } else {
+        try {
+            audiosFileMap[audio.audioKey]?.let { file ->
+                FileInputStream(file).use {
+                    val length = it.available().toDouble()
+                    val offset = ((startTime / totalTime) * length).toLong()
                     item.soundID = soundPool?.load(it.fd, offset, length.toLong(), 1)
                 }
             }
+        } catch (e: Exception) {
+            LogUtils.error(TAG, e)
         }
         return item
     }
@@ -309,21 +302,6 @@ class SVGAVideoEntity {
 
     private fun setupSoundPool(entity: MovieEntity, completionBlock: () -> Unit) {
         var soundLoaded = 0
-        if (SVGASoundManager.isInit()) {
-            soundCallback = object : SVGASoundManager.SVGASoundCallBack {
-                override fun onVolumeChange(value: Float) {
-                    SVGASoundManager.setVolume(value, this@SVGAVideoEntity)
-                }
-
-                override fun onComplete() {
-                    soundLoaded++
-                    if (soundLoaded >= entity.audios.count()) {
-                        completionBlock()
-                    }
-                }
-            }
-            return
-        }
         soundPool = generateSoundPool(entity)
         LogUtils.info("SVGAParser", "pool_start")
         soundPool?.setOnLoadCompleteListener { _, _, _ ->
@@ -354,12 +332,6 @@ class SVGAVideoEntity {
     }
 
     fun clear() {
-        if (SVGASoundManager.isInit()) {
-            this.audioList.forEach {
-                it.soundID?.let { id -> SVGASoundManager.unload(id) }
-            }
-            soundCallback = null
-        }
         soundPool?.release()
         soundPool = null
         audioList = emptyList()
