@@ -5,11 +5,14 @@ import android.net.http.HttpResponseCache
 import com.opensource.svgaplayer.cache.SVGABitmapCache
 import com.opensource.svgaplayer.cache.SVGAFileCache
 import com.opensource.svgaplayer.cache.SVGAMemoryCache
+import com.opensource.svgaplayer.download.FileDownloader
 import com.opensource.svgaplayer.url.UrlDecoder
 import com.opensource.svgaplayer.url.UrlDecoderManager
 import com.opensource.svgaplayer.utils.log.ILogger
 import com.opensource.svgaplayer.utils.log.SVGALogger
 import java.io.File
+import java.net.URL
+import java.net.URLDecoder
 import java.util.concurrent.ThreadPoolExecutor
 
 /**
@@ -57,6 +60,58 @@ object SVGAManager {
         //日志代理
         loggerProxy?.let { logger ->
             SVGALogger.injectSVGALoggerImp(logger)
+        }
+    }
+
+    /**
+     * svga 预加载
+     */
+    fun preload(urlList: List<String>, width: Int, height: Int) {
+        val urlDecoder = UrlDecoderManager.getUrlDecoder()
+        val fileDownloader = FileDownloader()
+        val queue = urlList
+            .asSequence()
+            .filter { it.startsWith("http://") || it.startsWith("https://") }
+            .map { urlDecoder.decodeSvgaUrl(it, width, height) }
+            .map {
+                val decode = try {
+                    URLDecoder.decode(it, "UTF-8")
+                } catch (e: Exception) {
+                    it
+                }
+                val url = try {
+                    URL(decode)
+                } catch (e: Exception) {
+                    null
+                }
+                url
+            }
+            .mapNotNull {
+                it
+            }
+            .toMutableList()
+        preload(fileDownloader, queue, width, height)
+    }
+
+    private fun preload(
+        fileDownloader: FileDownloader,
+        queue: MutableList<URL>,
+        width: Int,
+        height: Int
+    ) {
+        val url = queue.removeFirstOrNull()
+        if (url != null) {
+            val cacheKey = SVGAFileCache.buildCacheKey(url)
+            val cachedType = SVGAFileCache.getCachedType(cacheKey)
+            if (cachedType != null) {
+                preload(fileDownloader, queue, width, height)
+                return
+            }
+            fileDownloader.resume(url, {
+                preload(fileDownloader, queue, width, height)
+            }, {
+                preload(fileDownloader, queue, width, height)
+            })
         }
     }
 
