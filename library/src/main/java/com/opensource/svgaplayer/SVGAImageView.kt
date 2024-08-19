@@ -503,6 +503,8 @@ open class SVGAImageView @JvmOverloads constructor(
         if (lastSource != source || source.isNullOrEmpty()) return false
         //获取原有drawable
         val drawable = drawable as? SVGADrawable ?: return false
+        //被清理的drawable不需要重新加载
+        if (drawable.cleared) return false
         //存在dynamicItem，因为可能前后两次存在差异，需要重新加载数据
         if (drawable.dynamicItem != null && dynamicBlock != null) return false
         //动画是否正在执行
