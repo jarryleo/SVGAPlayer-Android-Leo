@@ -19,6 +19,7 @@ import kotlin.math.roundToInt
  * Created by cuiminghui on 2017/3/30.
  */
 class SVGADynamicEntity {
+    internal var invalidateCallback:() -> Unit = {}
 
     internal var dynamicHidden: HashMap<String, Boolean> = hashMapOf()
 
@@ -93,6 +94,7 @@ class SVGADynamicEntity {
                 if (bitmap != null) {
                     dynamicImage[forKey] = bitmap
                     dynamicImageJob.remove(forKey)
+                    invalidateCallback.invoke()
                 }
             }
             dynamicImageJob[forKey] = job
