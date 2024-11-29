@@ -269,6 +269,9 @@ open class SVGAImageView @JvmOverloads constructor(
         val drawable = getSVGADrawable() ?: return
         drawable.cleared = false
         drawable.scaleType = scaleType
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            drawable.layoutDirection = layoutDirection
+        }
     }
 
     private fun getSVGADrawable(): SVGADrawable? {
@@ -418,6 +421,9 @@ open class SVGAImageView @JvmOverloads constructor(
                 postInvalidate()
             }
             drawable.cleared = true
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                drawable.layoutDirection = layoutDirection
+            }
             setImageDrawable(drawable)
         }
     }
