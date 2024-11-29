@@ -4,8 +4,6 @@ import android.content.Intent;
 import android.database.DataSetObserver;
 import android.graphics.Color;
 import android.os.Bundle;
-import android.support.annotation.Nullable;
-import android.support.v7.app.AppCompatActivity;
 import android.view.Gravity;
 import android.view.View;
 import android.view.ViewGroup;
@@ -14,6 +12,9 @@ import android.widget.LinearLayout;
 import android.widget.ListAdapter;
 import android.widget.ListView;
 import android.widget.TextView;
+
+import androidx.annotation.Nullable;
+import androidx.appcompat.app.AppCompatActivity;
 
 import com.opensource.svgaplayer.SVGAManager;
 
@@ -55,7 +56,7 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
         this.items.add(new SampleItem("Animation With Dynamic Image", new Intent(this, AnimationWithDynamicImageActivity.class)));
         this.items.add(new SampleItem("Animation With Dynamic Click", new Intent(this, AnimationFromClickActivity.class)));
         this.items.add(new SampleItem("SVGAList(本地资源)", new Intent(this, SVGAListAssetsActivity.class)));
-        this.items.add(new SampleItem("SVGAList(网络资源)", new Intent(this, SVGAListNetworkActivity.class)));
+        this.items.add(new SampleItem("SVGAList(网络资源)", new Intent(this, SVGARvListNetworkActivity.class)));
         this.items.add(new SampleItem("内存缓存(本地资源)", new Intent(this, SVGACacheAssetsActivity.class)));
         this.items.add(new SampleItem("内存缓存(网络资源)", new Intent(this, SVGACacheNetworkActivity.class)));
     }

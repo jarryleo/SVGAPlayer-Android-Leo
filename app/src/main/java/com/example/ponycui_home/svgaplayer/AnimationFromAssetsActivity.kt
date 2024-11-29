@@ -4,7 +4,6 @@ import android.app.Activity
 import android.graphics.Color
 import android.os.Build
 import android.os.Bundle
-import android.support.annotation.RequiresApi
 import com.opensource.svgaplayer.SVGAImageView
 import com.opensource.svgaplayer.entities.SVGATextEntity
 import com.opensource.svgaplayer.utils.log.SVGALogger.setLogEnabled
@@ -26,7 +25,6 @@ class AnimationFromAssetsActivity : Activity() {
         }
     }
 
-    @RequiresApi(api = Build.VERSION_CODES.M)
     private fun loadAnimation() {
         val name = "room_big_gift_level3.svga"
         val textSize = 14.dp.toFloat()
