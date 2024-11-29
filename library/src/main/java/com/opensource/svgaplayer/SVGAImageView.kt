@@ -4,6 +4,7 @@ import android.animation.Animator
 import android.animation.ValueAnimator
 import android.annotation.SuppressLint
 import android.content.Context
+import android.graphics.Canvas
 import android.graphics.Rect
 import android.os.Build
 import android.text.format.Formatter
@@ -269,9 +270,6 @@ open class SVGAImageView @JvmOverloads constructor(
         val drawable = getSVGADrawable() ?: return
         drawable.cleared = false
         drawable.scaleType = scaleType
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            drawable.layoutDirection = layoutDirection
-        }
     }
 
     private fun getSVGADrawable(): SVGADrawable? {
@@ -417,14 +415,15 @@ open class SVGAImageView @JvmOverloads constructor(
             setImageDrawable(null)
         } else {
             val drawable = SVGADrawable(videoItem, dynamicItem)
+            if (lastConfig?.isCacheToMemory == true){
+                drawable.cacheToMemory()
+            }
             dynamicItem?.invalidateCallback = {
                 postInvalidate()
             }
             drawable.cleared = true
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                drawable.layoutDirection = layoutDirection
-            }
             setImageDrawable(drawable)
+
         }
     }
 
@@ -448,6 +447,13 @@ open class SVGAImageView @JvmOverloads constructor(
                 ) * it.duration).toLong()
             }
         }
+    }
+
+    override fun onDraw(canvas: Canvas) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            getSVGADrawable()?.layoutDirection = layoutDirection
+        }
+        super.onDraw(canvas)
     }
 
     fun stepToPercentage(percentage: Double, andPlay: Boolean) {

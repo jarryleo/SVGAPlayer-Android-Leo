@@ -92,6 +92,12 @@ class SVGADrawable(
         drawer.clear()
     }
 
+    fun cacheToMemory() {
+        videoItem.getMemoryCacheKey()?.apply {
+            SVGAMemoryCache.INSTANCE.putData(this, videoItem)
+        }
+    }
+
     /**
      * 释放声音资源
      */
