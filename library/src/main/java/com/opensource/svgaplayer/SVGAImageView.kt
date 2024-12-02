@@ -415,15 +415,11 @@ open class SVGAImageView @JvmOverloads constructor(
             setImageDrawable(null)
         } else {
             val drawable = SVGADrawable(videoItem, dynamicItem)
-            if (lastConfig?.isCacheToMemory == true){
-                drawable.cacheToMemory()
-            }
             dynamicItem?.invalidateCallback = {
                 postInvalidate()
             }
             drawable.cleared = true
             setImageDrawable(drawable)
-
         }
     }
 
@@ -447,13 +443,6 @@ open class SVGAImageView @JvmOverloads constructor(
                 ) * it.duration).toLong()
             }
         }
-    }
-
-    override fun onDraw(canvas: Canvas) {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            getSVGADrawable()?.layoutDirection = layoutDirection
-        }
-        super.onDraw(canvas)
     }
 
     fun stepToPercentage(percentage: Double, andPlay: Boolean) {
