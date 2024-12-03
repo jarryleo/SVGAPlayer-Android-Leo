@@ -42,10 +42,12 @@ class SVGAVideoEntity {
     internal var spriteList: List<SVGAVideoSpriteEntity> = emptyList()
     internal var audioList: List<SVGAAudioEntity> = emptyList()
     internal var soundPool: SoundPool? = null
+    //主体 bitmap 内存大户
     internal var imageMap = HashMap<String, Bitmap>()
     private var mCacheDir: File
     private var mFrameHeight = 0
     private var mFrameWidth = 0
+    //这里可能会持有外部View，如果内存缓存会导致泄漏
     private var mPlayCallback: SVGAParser.PlayCallback? = null
     private lateinit var mCallback: () -> Unit
 
@@ -123,10 +125,11 @@ class SVGAVideoEntity {
     internal fun prepare(callback: () -> Unit, playCallback: SVGAParser.PlayCallback?) {
         mCallback = callback
         mPlayCallback = playCallback
-        if (movieItem == null) {
+        val item = movieItem
+        if (item == null) {
             mCallback()
         } else {
-            setupAudios(movieItem!!) {
+            setupAudios(item) {
                 mCallback()
             }
         }
@@ -243,6 +246,7 @@ class SVGAVideoEntity {
             }
             it.onPlay(fileList)
             mCallback()
+            mPlayCallback = null
             return item
         }
 

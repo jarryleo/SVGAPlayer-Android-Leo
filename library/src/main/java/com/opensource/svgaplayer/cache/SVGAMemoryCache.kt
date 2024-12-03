@@ -11,7 +11,7 @@ import java.lang.ref.WeakReference
  * @Author lyd
  * @Time 2023/10/8 10:15
  */
-class SVGAMemoryCache(private val cacheLimit: Int = 3) {
+class SVGAMemoryCache(private val cacheLimit: Int = 5) {
 
     private val lruCache by lazy {
         object : LruCache<String, WeakReference<SVGAVideoEntity>>(cacheLimit) {
@@ -57,7 +57,7 @@ class SVGAMemoryCache(private val cacheLimit: Int = 3) {
         val INSTANCE by lazy { SVGAMemoryCache(limitCount) }
 
         /** 内存缓存个数 */
-        var limitCount = 3
+        var limitCount = 5
             set(value) {
                 field = value
                 INSTANCE.resizeCache(value)

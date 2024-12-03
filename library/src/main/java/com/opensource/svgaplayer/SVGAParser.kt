@@ -6,6 +6,7 @@ import android.os.Handler
 import android.os.Looper
 import com.opensource.svgaplayer.cache.SVGAFileCache
 import com.opensource.svgaplayer.cache.SVGAMemoryCache
+import com.opensource.svgaplayer.cache.SVGAMemoryLoadingQueue
 import com.opensource.svgaplayer.coroutine.SvgaCoroutineManager
 import com.opensource.svgaplayer.download.FileDownloader
 import com.opensource.svgaplayer.proto.MovieEntity
@@ -347,9 +348,29 @@ class SVGAParser private constructor(context: Context) {
         callback: ParseCompletion?,
         alias: String?
     ) {
-        handler.post {
-            LogUtils.info(TAG, "================ $alias parser complete ================")
-            callback?.onComplete(videoItem)
+        LogUtils.info(TAG, "================ $alias parser complete ================")
+        val cacheKey = videoItem.getMemoryCacheKey()
+        if (cacheKey.isNullOrEmpty()){
+            handler.post {
+                callback?.onComplete(videoItem)
+            }
+        }else{
+            //存入内存缓存
+            SVGAMemoryCache.INSTANCE.putData(cacheKey, videoItem)
+            val inQueue = SVGAMemoryLoadingQueue.inQueue(cacheKey)
+            if (inQueue){
+                //通知等待队列
+                handler.post {
+                    val itemList = SVGAMemoryLoadingQueue.removeItem(cacheKey)
+                    itemList?.forEach {
+                        it.callback?.onComplete(videoItem)
+                    }
+                }
+            }else{
+                handler.post {
+                    callback?.onComplete(videoItem)
+                }
+            }
         }
     }
 
@@ -466,8 +487,18 @@ class SVGAParser private constructor(context: Context) {
         alias: String?
     ): Boolean {
         return if (config.isCacheToMemory && !memoryCacheKey.isNullOrEmpty()) { //加载内存缓存
-            //缓存数据为空
-            val entity = SVGAMemoryCache.INSTANCE.getData(memoryCacheKey) ?: return false
+            //获取内存缓存
+            val entity = SVGAMemoryCache.INSTANCE.getData(memoryCacheKey)
+            //如果内存缓存为空，则加入等待队列
+            if (entity == null) {
+                val inQueue = SVGAMemoryLoadingQueue.inQueue(memoryCacheKey)
+                //加入等待队列
+                SVGAMemoryLoadingQueue.addItem(
+                    memoryCacheKey,
+                    SVGAMemoryLoadingQueue.SVGAMemoryLoadingItem(callback)
+                )
+                return inQueue
+            }
             entity.prepare({
                 LogUtils.info(TAG, "decodeFromMemoryCacheKey prepare success")
                 this.invokeCompleteCallback(entity, callback, alias = alias)
