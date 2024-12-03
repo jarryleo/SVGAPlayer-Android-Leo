@@ -22,7 +22,7 @@ class SvgaHolder : SimpleHolder<StringData>(R.layout.item_svga) {
         item.getViewById<SVGAImageView>(R.id.svga) {
             it.load(
                 data.string.toString(),
-                config = SVGAConfig(frameWidth = 60.dp, frameHeight = 60.dp, isCacheToMemory = true)
+                config = SVGAConfig(frameWidth = 20.dp, frameHeight = 20.dp, isCacheToMemory = true)
             )
         }
     }

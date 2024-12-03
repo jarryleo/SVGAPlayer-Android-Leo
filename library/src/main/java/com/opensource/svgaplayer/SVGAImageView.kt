@@ -4,7 +4,6 @@ import android.animation.Animator
 import android.animation.ValueAnimator
 import android.annotation.SuppressLint
 import android.content.Context
-import android.graphics.Canvas
 import android.graphics.Rect
 import android.os.Build
 import android.text.format.Formatter
@@ -119,8 +118,8 @@ open class SVGAImageView @JvmOverloads constructor(
         if (isReplayDrawable(source)) {
             return this
         }
-        lastSource = source
-        lastConfig = config
+        this.lastSource = source
+        this.lastConfig = config
         if (source.isNullOrEmpty()) {
             stopAnimation()
             onError?.invoke(this)
@@ -141,7 +140,7 @@ open class SVGAImageView @JvmOverloads constructor(
         loops = config?.loopCount ?: loops
         mAutoPlay = config?.autoPlay ?: true
         var cfg = config
-        if (cfg != null && !cfg.isOriginal) {
+        if (cfg != null && !cfg.isOriginal && cfg.frameWidth == 0 && cfg.frameHeight == 0) {
             cfg = cfg.copy(
                 frameWidth = width,
                 frameHeight = height
@@ -429,7 +428,7 @@ open class SVGAImageView @JvmOverloads constructor(
         if (drawable == null) {
             if (width > 0 && height > 0) {
                 lastSource?.let {
-                    parserSource(it)
+                    parserSource(it, lastConfig)
                 }
             }
             return
@@ -497,7 +496,7 @@ open class SVGAImageView @JvmOverloads constructor(
     override fun onLayout(changed: Boolean, left: Int, top: Int, right: Int, bottom: Int) {
         super.onLayout(changed, left, top, right, bottom)
         if (changed && width > 0 && height > 0 && lastSource != null) {
-            parserSource(lastSource)
+            parserSource(lastSource, lastConfig)
         }
     }
 
