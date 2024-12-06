@@ -336,9 +336,13 @@ class SVGAVideoEntity {
     }
 
     fun clear() {
+        LogUtils.debug(TAG, "clear size = ${getMemorySize()}")
         soundPool?.release()
         soundPool = null
         audioList = emptyList()
+        spriteList.forEach {
+            it.clear()
+        }
         spriteList = emptyList()
         imageMap.filter {
             !it.value.isRecycled

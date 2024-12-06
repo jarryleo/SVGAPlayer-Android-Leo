@@ -229,7 +229,10 @@ class SVGAParser private constructor(context: Context) {
                             config.frameHeight,
                             memoryCacheKey
                         )
-                        LogUtils.info(TAG, "inflate complete")
+                        LogUtils.info(
+                            TAG,
+                            "inflate complete : width = ${config.frameWidth}, height = ${config.frameHeight}, size = ${videoItem.getMemorySize()}"
+                        )
                         LogUtils.info(TAG, "SVGAVideoEntity prepare start")
                         videoItem.prepare({
                             LogUtils.info(TAG, "SVGAVideoEntity prepare success")
@@ -350,15 +353,15 @@ class SVGAParser private constructor(context: Context) {
     ) {
         LogUtils.info(TAG, "================ $alias parser complete ================")
         val cacheKey = videoItem.getMemoryCacheKey()
-        if (cacheKey.isNullOrEmpty()){
+        if (cacheKey.isNullOrEmpty()) {
             handler.post {
                 callback?.onComplete(videoItem)
             }
-        }else{
+        } else {
             //存入内存缓存
             SVGAMemoryCache.INSTANCE.putData(cacheKey, videoItem)
             val inQueue = SVGAMemoryLoadingQueue.inQueue(cacheKey)
-            if (inQueue){
+            if (inQueue) {
                 //通知等待队列
                 handler.post {
                     val itemList = SVGAMemoryLoadingQueue.removeItem(cacheKey)
@@ -366,7 +369,7 @@ class SVGAParser private constructor(context: Context) {
                         it.callback?.onComplete(videoItem)
                     }
                 }
-            }else{
+            } else {
                 handler.post {
                     callback?.onComplete(videoItem)
                 }

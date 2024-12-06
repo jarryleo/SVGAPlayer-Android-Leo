@@ -197,13 +197,14 @@ open class SVGAImageView @JvmOverloads constructor(
 
     fun startAnimation(videoItem: SVGAVideoEntity) {
         post {
+            stopAnimation()
             videoItem.antiAlias = mAntiAlias
             val dynamicItem = SVGADynamicEntity()
             dynamicBlock?.let { dynamicItem.it() }
             setVideoItem(videoItem, dynamicItem)
             getSVGADrawable()?.scaleType = scaleType
             if (mAutoPlay) {
-                startAnimation()
+                play(null, false)
             }
         }
     }
@@ -398,6 +399,7 @@ open class SVGAImageView @JvmOverloads constructor(
         mAnimator?.cancel()
         mAnimator?.removeAllListeners()
         mAnimator?.removeAllUpdateListeners()
+        mAnimator = null
         getSVGADrawable()?.stop()
         getSVGADrawable()?.cleared = clear
         if (clear) {

@@ -12,7 +12,7 @@ internal class SVGAVideoSpriteEntity {
 
     val matteKey: String?
 
-    val frames: List<SVGAVideoSpriteFrameEntity>
+    var frames: List<SVGAVideoSpriteFrameEntity>?
 
     constructor(obj: JSONObject) {
         this.imageKey = obj.optString("imageKey")
@@ -22,11 +22,9 @@ internal class SVGAVideoSpriteEntity {
             for (i in 0 until it.length()) {
                 it.optJSONObject(i)?.let { frame ->
                     val frameItem = SVGAVideoSpriteFrameEntity(frame)
-                    if (frameItem.shapes.isNotEmpty()) {
-                        frameItem.shapes.first().let { shape ->
-                            if (shape.isKeep && mutableFrames.size > 0) {
-                                frameItem.shapes = mutableFrames.last().shapes
-                            }
+                    frameItem.shapes?.firstOrNull()?.let { shape ->
+                        if (shape.isKeep && mutableFrames.size > 0) {
+                            frameItem.shapes = mutableFrames.last().shapes
                         }
                     }
                     mutableFrames.add(frameItem)
@@ -42,12 +40,10 @@ internal class SVGAVideoSpriteEntity {
         var lastFrame: SVGAVideoSpriteFrameEntity? = null
         frames = obj.frames?.map { frame ->
             val frameItem = SVGAVideoSpriteFrameEntity(frame)
-            if (frameItem.shapes.isNotEmpty()) {
-                frameItem.shapes.first().let { shape ->
-                    if (shape.isKeep) {
-                        lastFrame?.let { last ->
-                            frameItem.shapes = last.shapes
-                        }
+            frameItem.shapes?.firstOrNull()?.let { shape ->
+                if (shape.isKeep) {
+                    lastFrame?.let { last ->
+                        frameItem.shapes = last.shapes
                     }
                 }
             }
@@ -57,4 +53,8 @@ internal class SVGAVideoSpriteEntity {
 
     }
 
+    fun clear() {
+        frames?.forEach { it.clear() }
+        frames = null
+    }
 }

@@ -228,11 +228,11 @@ internal class SVGACanvasDrawer(
         }
     }
 
-    private fun shareFrameMatrix(transform: Matrix): Matrix {
+    private fun shareFrameMatrix(transform: Matrix?): Matrix {
         val matrix = this.sharedValues.sharedMatrix()
         matrix.postScale(scaleInfo.scaleFx, scaleInfo.scaleFy) //这里不能随意调换顺序，先缩放再位移。否则位移会受到缩放的影响
         matrix.postTranslate(scaleInfo.tranFx, scaleInfo.tranFy)
-        matrix.preConcat(transform)
+        transform?.let { matrix.preConcat(transform) }
         return matrix
     }
 
@@ -583,7 +583,7 @@ internal class SVGACanvasDrawer(
 
     private fun drawShape(sprite: SVGADrawerSprite, canvas: Canvas) {
         val frameMatrix = shareFrameMatrix(sprite.frameEntity.transform)
-        sprite.frameEntity.shapes.forEach { shape ->
+        sprite.frameEntity.shapes?.forEach { shape ->
             shape.buildPath()
             shape.shapePath?.let {
                 val paint = this.sharedValues.sharedPaint()

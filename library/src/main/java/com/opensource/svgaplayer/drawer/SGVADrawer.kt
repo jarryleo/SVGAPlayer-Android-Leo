@@ -30,15 +30,16 @@ internal open class SGVADrawer(val videoItem: SVGAVideoEntity) {
 
     internal fun requestFrameSprites(frameIndex: Int): List<SVGADrawerSprite> {
         return videoItem.spriteList.mapNotNull { sprite ->
-            if (frameIndex >= 0 && frameIndex < sprite.frames.size) {
+            val frames = sprite.frames ?: emptyList()
+            if (frameIndex >= 0 && frameIndex < frames.size) {
                 sprite.imageKey?.let { imageKey ->
-                    if (!imageKey.endsWith(".matte") && sprite.frames[frameIndex].alpha <= 0.0) {
+                    if (!imageKey.endsWith(".matte") && frames[frameIndex].alpha <= 0.0) {
                         return@mapNotNull null
                     }
                     return@mapNotNull (spritePool.acquire() ?: SVGADrawerSprite()).apply {
                         _matteKey = sprite.matteKey
                         _imageKey = sprite.imageKey
-                        _frameEntity = sprite.frames[frameIndex]
+                        _frameEntity = frames[frameIndex]
                     }
                 }
             }
