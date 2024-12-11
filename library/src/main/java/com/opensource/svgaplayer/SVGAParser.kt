@@ -222,22 +222,25 @@ class SVGAParser private constructor(context: Context) {
                         )
                     } else {
                         LogUtils.info(TAG, "inflate start")
-                        val videoItem = SVGAVideoEntity(
-                            MovieEntity.ADAPTER.decode(InflaterInputStream(inputStream)),
-                            File(cacheKey),
-                            config.frameWidth,
-                            config.frameHeight,
-                            memoryCacheKey
-                        )
-                        LogUtils.info(
-                            TAG,
-                            "inflate complete : width = ${config.frameWidth}, height = ${config.frameHeight}, size = ${videoItem.getMemorySize()}"
-                        )
-                        LogUtils.info(TAG, "SVGAVideoEntity prepare start")
-                        videoItem.prepare({
-                            LogUtils.info(TAG, "SVGAVideoEntity prepare success")
-                            invokeCompleteCallback(videoItem, callback, alias)
-                        }, playCallback)
+                        InflaterInputStream(inputStream).use { inflaterInputStream ->
+                            val entity = MovieEntity.ADAPTER.decode(inflaterInputStream)
+                            val videoItem = SVGAVideoEntity(
+                                entity,
+                                File(cacheKey),
+                                config.frameWidth,
+                                config.frameHeight,
+                                memoryCacheKey
+                            )
+                            LogUtils.info(
+                                TAG,
+                                "inflate complete : width = ${config.frameWidth}, height = ${config.frameHeight}, size = ${videoItem.getMemorySize()}"
+                            )
+                            LogUtils.info(TAG, "SVGAVideoEntity prepare start")
+                            videoItem.prepare({
+                                LogUtils.info(TAG, "SVGAVideoEntity prepare success")
+                                invokeCompleteCallback(videoItem, callback, alias)
+                            }, playCallback)
+                        }
                     }
                 }
             } catch (e: Exception) {
@@ -297,18 +300,21 @@ class SVGAParser private constructor(context: Context) {
                         alias
                     )
                 } else {
-                    val videoItem = SVGAVideoEntity(
-                        MovieEntity.ADAPTER.decode(InflaterInputStream(inputStream)),
-                        File(cacheKey),
-                        config.frameWidth,
-                        config.frameHeight,
-                        memoryCacheKey
-                    )
-                    LogUtils.info(TAG, "SVGAVideoEntity prepare start")
-                    videoItem.prepare({
-                        LogUtils.info(TAG, "SVGAVideoEntity prepare success")
-                        invokeCompleteCallback(videoItem, callback, alias)
-                    }, playCallback)
+                    InflaterInputStream(inputStream).use { inflaterInputStream ->
+                        val entity = MovieEntity.ADAPTER.decode(inflaterInputStream)
+                        val videoItem = SVGAVideoEntity(
+                            entity,
+                            File(cacheKey),
+                            config.frameWidth,
+                            config.frameHeight,
+                            memoryCacheKey
+                        )
+                        LogUtils.info(TAG, "SVGAVideoEntity prepare start")
+                        videoItem.prepare({
+                            LogUtils.info(TAG, "SVGAVideoEntity prepare success")
+                            invokeCompleteCallback(videoItem, callback, alias)
+                        }, playCallback)
+                    }
                 }
             } catch (e: java.lang.Exception) {
                 invokeErrorCallback(e, callback, alias)
