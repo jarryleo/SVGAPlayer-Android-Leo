@@ -5,7 +5,9 @@ import android.animation.ValueAnimator
 import android.annotation.SuppressLint
 import android.content.Context
 import android.graphics.Rect
+import android.net.Uri
 import android.os.Build
+import android.provider.MediaStore
 import android.text.format.Formatter
 import android.util.AttributeSet
 import android.view.MotionEvent
@@ -16,6 +18,7 @@ import com.opensource.svgaplayer.url.UrlDecoderManager
 import com.opensource.svgaplayer.utils.SVGARange
 import com.opensource.svgaplayer.utils.log.LogUtils
 import kotlinx.coroutines.Job
+import java.io.File
 import java.net.URL
 import java.net.URLDecoder
 
@@ -155,7 +158,7 @@ open class SVGAImageView @JvmOverloads constructor(
             SVGAParser.init(context.applicationContext)
             parser = SVGAParser.shareParser()
         }
-        if (realUrl.startsWith("http://") || realUrl.startsWith("https://")) {
+        if (isUrl(realUrl)) {
             val decode = try {
                 URLDecoder.decode(realUrl, "UTF-8")
             } catch (e: Exception) {
@@ -180,6 +183,18 @@ open class SVGAImageView @JvmOverloads constructor(
                 config = cfg ?: SVGAConfig(frameWidth = width, frameHeight = height),
                 SVGAViewLoadCallback(this)
             )
+        } else if (isFilePath(realUrl)) {
+            if (loadingSource == realUrl && loadJob?.isActive == true) {
+                return
+            }
+            loadingSource = realUrl
+            clear()
+            LogUtils.debug(TAG, "load from file: $realUrl , last source: $lastSource")
+            loadJob = parser?.decodeFromFile(
+                realUrl,
+                config = cfg ?: SVGAConfig(frameWidth = width, frameHeight = height),
+                SVGAViewLoadCallback(this)
+            )
         } else {
             if (loadingSource == realUrl && loadJob?.isActive == true) {
                 return
@@ -192,6 +207,39 @@ open class SVGAImageView @JvmOverloads constructor(
                 config = cfg ?: SVGAConfig(frameWidth = width, frameHeight = height),
                 SVGAViewLoadCallback(this)
             )
+        }
+    }
+
+    private fun isUrl(text: String?): Boolean {
+        if (text == null) return false
+        return try {
+            URL(text)
+            true
+        } catch (e: Exception) {
+            false
+        }
+    }
+
+    private fun isFilePath(text: String?): Boolean {
+        if (text == null) return false
+        val fileExists = kotlin.runCatching { File(text) }.getOrNull()?.exists() ?: false
+        if (fileExists) {
+            return true
+        }
+        val uri = kotlin.runCatching { Uri.parse(text) }.getOrNull() ?: return false
+        val scheme = uri.scheme?.lowercase()
+        return when (scheme) {
+            "file" -> true
+            "content" -> {
+                val path = kotlin.runCatching {
+                    context.contentResolver.query(uri, null, null, null, null)
+                }.getOrNull()?.use {
+                    it.getString(it.getColumnIndexOrThrow(MediaStore.MediaColumns.DATA))
+                }
+                path != null && File(path).exists()
+            }
+
+            else -> false
         }
     }
 

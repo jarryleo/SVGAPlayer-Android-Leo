@@ -2,6 +2,7 @@ package com.opensource.svgaplayer
 
 import android.annotation.SuppressLint
 import android.content.Context
+import android.net.Uri
 import android.os.Handler
 import android.os.Looper
 import com.opensource.svgaplayer.cache.SVGAFileCache
@@ -70,6 +71,64 @@ class SVGAParser private constructor(context: Context) {
         }
     }
 
+    fun decodeFromFile(
+        path: String,
+        config: SVGAConfig,
+        callback: ParseCompletion?,
+        playCallback: PlayCallback? = null
+    ): Job? {
+        if (mContext == null) {
+            LogUtils.error(TAG, "在配置 SVGAParser context 前, 无法解析 SVGA 文件。")
+            return null
+        }
+        LogUtils.info(TAG, "================ decode $path from file ================")
+        //加载内存缓存数据
+        val memoryCacheKey: String? =
+            if (config.isCacheToMemory) SVGAMemoryCache.createKey(path, config) else null
+        if (decodeFromMemoryCacheKey(memoryCacheKey, config, callback, playCallback, path)) {
+            return null
+        }
+        //加载文件数据
+        return SvgaCoroutineManager.launchIo {
+            try {
+                val cacheKey = SVGAFileCache.buildCacheKey(path)
+                var inputStream: InputStream? = null
+                val file = kotlin.runCatching { File(path) }.getOrNull()
+                if (file?.exists() == true) {
+                    if (file.isFile) {
+                        inputStream = FileInputStream(file)
+                    }
+                } else {
+                    val uri = kotlin.runCatching { Uri.parse(path) }.getOrNull()
+                    val scheme = uri?.scheme?.lowercase()
+                    when (scheme) {
+                        "http", "https", "file" -> {
+                            inputStream = URL(path).openStream()
+                        }
+
+                        "content" -> {
+                            inputStream = mContext.contentResolver.openInputStream(uri)
+                        }
+                    }
+                }
+                inputStream?.let {
+                    decodeFromInputStream(
+                        it,
+                        cacheKey,
+                        config,
+                        callback,
+                        true,
+                        playCallback,
+                        memoryCacheKey,
+                        alias = path
+                    )
+                } ?: invokeErrorCallback(Exception("file inputStream is null"), callback, path)
+            } catch (e: Exception) {
+                invokeErrorCallback(e, callback, path)
+            }
+        }
+    }
+
     fun decodeFromAssets(
         name: String,
         callback: ParseCompletion?,
@@ -109,7 +168,7 @@ class SVGAParser private constructor(context: Context) {
                         memoryCacheKey,
                         alias = name
                     )
-                }
+                } ?: invokeErrorCallback(Exception("assets inputStream is null"), callback, name)
             } catch (e: Exception) {
                 invokeErrorCallback(e, callback, name)
             }
@@ -202,7 +261,8 @@ class SVGAParser private constructor(context: Context) {
             try {
                 LogUtils.info(
                     TAG,
-                    "================ decode $alias from svga cachel file to entity ================"
+                    "================ decode $alias from svga cache file to entity ================ \n" +
+                            "svga cache File = $svgaFile"
                 )
                 FileInputStream(svgaFile).use { inputStream ->
                     //检查是否是zip文件
