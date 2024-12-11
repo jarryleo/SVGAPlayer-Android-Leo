@@ -213,8 +213,12 @@ open class SVGAImageView @JvmOverloads constructor(
     private fun isUrl(text: String?): Boolean {
         if (text == null) return false
         return try {
-            URL(text)
-            true
+            val uri = kotlin.runCatching { Uri.parse(text) }.getOrNull()
+            val scheme = uri?.scheme?.lowercase()
+            if (scheme == "http" || scheme == "https") {
+                return true
+            }
+            false
         } catch (e: Exception) {
             false
         }
