@@ -380,11 +380,11 @@ internal class SVGACanvasDrawer(
                     Int.MAX_VALUE
                 }
                 //是否是跑马灯文本，是的话文本 bitmap 宽度为 textWidth，否则为 drawingBitmap 宽度
-                val textWidth = it.paint.measureText(it.text, 0, it.text.length).roundToInt()
                 val scaleTextY = drawingBitmap.height.toFloat() / it.height
-                val fixWidth = (textWidth * scaleTextY).roundToInt()
-                val isMarquee =
-                    (lineMax == 1 && fixWidth > drawingBitmap.width && it.width != Int.MAX_VALUE)
+                val textSize = it.paint.textSize * scaleTextY
+                it.paint.textSize = textSize
+                val textWidth = it.paint.measureText(it.text, 0, it.text.length).roundToInt()
+                val isMarquee = (lineMax == 1 && textWidth > drawingBitmap.width && it.width != Int.MAX_VALUE)
                 drawTextMarqueeCache[imageKey] = isMarquee
                 val targetWidth = if (isMarquee) textWidth else drawingBitmap.width
                 val layout = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
