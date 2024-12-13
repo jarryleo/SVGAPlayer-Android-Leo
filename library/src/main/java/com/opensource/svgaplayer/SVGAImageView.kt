@@ -63,6 +63,7 @@ open class SVGAImageView @JvmOverloads constructor(
     private val mAnimatorUpdateListener = AnimatorUpdateListener(this)
     private var mStartFrame = 0
     private var mEndFrame = 0
+    private var volume = 1f
 
     private var lastSource: String? = null
     private var loadingSource: String? = null
@@ -322,6 +323,7 @@ open class SVGAImageView @JvmOverloads constructor(
         val drawable = getSVGADrawable() ?: return
         drawable.cleared = false
         drawable.scaleType = scaleType
+        drawable.setVolume(volume)
     }
 
     private fun getSVGADrawable(): SVGADrawable? {
@@ -429,6 +431,15 @@ open class SVGAImageView @JvmOverloads constructor(
         val visibleRect = Rect()
         getGlobalVisibleRect(visibleRect)
         return visibleRect.width() > 0 && visibleRect.height() > 0
+    }
+
+    /**
+     * 设置动画音量
+     */
+    fun setVolume(volume: Float) {
+        val fixVolume = volume.coerceIn(0f, 1f)
+        this.volume = fixVolume
+        getSVGADrawable()?.setVolume(fixVolume)
     }
 
     fun pauseAnimation() {

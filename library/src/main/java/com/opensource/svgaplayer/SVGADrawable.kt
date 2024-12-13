@@ -58,6 +58,16 @@ class SVGADrawable(
 
     }
 
+    fun setVolume(volume: Float) {
+        val fixVolume = volume.coerceIn(0f, 1f)
+        drawer.setVolume(fixVolume, fixVolume)
+        videoItem.audioList.forEach { audio ->
+            audio.playID?.let {
+                videoItem.soundPool?.setVolume(it, fixVolume, fixVolume)
+            }
+        }
+    }
+
     fun resume() {
         videoItem.audioList.forEach { audio ->
             audio.playID?.let {

@@ -69,6 +69,14 @@ internal class SVGACanvasDrawer(
         )
     }
 
+    private var leftVolume = 1f
+    private var rightVolume = 1f
+
+    fun setVolume(leftVolume: Float, rightVolume: Float) {
+        this.leftVolume = leftVolume
+        this.rightVolume = rightVolume
+    }
+
     override fun drawFrame(canvas: Canvas, frameIndex: Int, scaleType: ImageView.ScaleType) {
         super.drawFrame(canvas, frameIndex, scaleType)
         playAudio(frameIndex)
@@ -215,7 +223,7 @@ internal class SVGACanvasDrawer(
             if (audio.startFrame == frameIndex) {
                 this.videoItem.soundPool?.let { soundPool ->
                     audio.soundID?.let { soundID ->
-                        audio.playID = soundPool.play(soundID, 1.0f, 1.0f, 1, 0, 1.0f)
+                        audio.playID = soundPool.play(soundID, leftVolume, rightVolume, 1, 0, 1.0f)
                     }
                 }
             }
@@ -384,7 +392,8 @@ internal class SVGACanvasDrawer(
                 val textSize = it.paint.textSize * scaleTextY
                 it.paint.textSize = textSize
                 val textWidth = it.paint.measureText(it.text, 0, it.text.length).roundToInt()
-                val isMarquee = (lineMax == 1 && textWidth > drawingBitmap.width && it.width != Int.MAX_VALUE)
+                val isMarquee =
+                    (lineMax == 1 && textWidth > drawingBitmap.width && it.width != Int.MAX_VALUE)
                 drawTextMarqueeCache[imageKey] = isMarquee
                 val targetWidth = if (isMarquee) textWidth else drawingBitmap.width
                 val layout = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
