@@ -40,6 +40,7 @@ internal class SVGACanvasDrawer(
     private val drawTextOffsetCache: HashMap<String, Float> = hashMapOf()
     private val drawTextRtlCache: HashMap<String, Boolean> = hashMapOf()
     private val drawTextMarqueeCache: HashMap<String, Boolean> = hashMapOf()
+    private val dynamicImageSizeCache: HashMap<String, Boolean> = hashMapOf()
     private val pathCache = PathCache()
 
     private var beginIndexList: Array<Boolean>? = null
@@ -248,6 +249,10 @@ internal class SVGACanvasDrawer(
         drawImage(sprite, canvas)
         drawShape(sprite, canvas)
         drawDynamic(sprite, canvas, frameIndex)
+    }
+
+    private fun isReplaceBitmap(imageKey: String): Boolean {
+        return dynamicItem?.isDynamicImage(imageKey) == true
     }
 
     private fun drawImage(sprite: SVGADrawerSprite, canvas: Canvas) {

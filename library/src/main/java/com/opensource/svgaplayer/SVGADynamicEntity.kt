@@ -67,6 +67,20 @@ class SVGADynamicEntity {
     }
 
     /**
+     * 判断key是否是动态图
+     */
+    fun isDynamicImage(forKey: String): Boolean {
+        return dynamicImageUrl.containsKey(forKey) || dynamicImage.containsKey(forKey)
+    }
+
+    /**
+     * 判断图片是否已经加载完成
+     */
+    fun hasValidBitmap(key: String): Boolean {
+        return dynamicImage[key]?.isRecycled == false
+    }
+
+    /**
      * 从网络加载图片
      */
     @JvmOverloads
