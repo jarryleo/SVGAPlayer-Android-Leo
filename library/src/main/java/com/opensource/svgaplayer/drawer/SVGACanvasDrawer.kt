@@ -396,6 +396,9 @@ internal class SVGACanvasDrawer(
                 it.paint.textSize = backTextSize
                 val isMarquee =
                     (lineMax == 1 && textWidth > drawingBitmap.width && it.width != Int.MAX_VALUE)
+                if (!isMarquee){
+                    it.paint.textSize = backTextSize
+                }
                 drawTextMarqueeCache[imageKey] = isMarquee
                 val targetWidth = if (isMarquee) textWidth else drawingBitmap.width
                 val layout = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
