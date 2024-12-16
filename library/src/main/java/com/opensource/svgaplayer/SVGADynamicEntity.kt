@@ -12,6 +12,7 @@ import com.opensource.svgaplayer.coroutine.SvgaCoroutineManager
 import com.opensource.svgaplayer.download.BitmapDownloader
 import com.opensource.svgaplayer.entities.SVGATextEntity
 import com.opensource.svgaplayer.url.UrlDecoderManager
+import com.opensource.svgaplayer.utils.BitmapTransformation
 import kotlinx.coroutines.Job
 import kotlin.math.roundToInt
 
@@ -19,13 +20,15 @@ import kotlin.math.roundToInt
  * Created by cuiminghui on 2017/3/30.
  */
 class SVGADynamicEntity {
-    internal var invalidateCallback:() -> Unit = {}
+    internal var invalidateCallback: () -> Unit = {}
 
     internal var dynamicHidden: HashMap<String, Boolean> = hashMapOf()
 
     private var dynamicImage: HashMap<String, Bitmap> = hashMapOf()
 
     private var dynamicImageUrl: HashMap<String, String> = hashMapOf()
+
+    private var dynamicBitmapTransformation: HashMap<String, BitmapTransformation> = hashMapOf()
 
     private var dynamicImageJob: HashMap<String, Job> = hashMapOf()
 
@@ -66,8 +69,12 @@ class SVGADynamicEntity {
     /**
      * 从网络加载图片
      */
-    fun setDynamicImage(url: String, forKey: String) {
+    @JvmOverloads
+    fun setDynamicImage(url: String, forKey: String, bitmapTransformation: BitmapTransformation? = null) {
         dynamicImageUrl[forKey] = url
+        bitmapTransformation?.let {
+            dynamicBitmapTransformation[forKey] = bitmapTransformation
+        }
     }
 
     fun requestImage(forKey: String, width: Int, height: Int): Bitmap? {
@@ -92,7 +99,13 @@ class SVGADynamicEntity {
             val job = SvgaCoroutineManager.launchIo {
                 val bitmap = BitmapDownloader.downloadBitmap(realUrl, width, height)
                 if (bitmap != null) {
-                    dynamicImage[forKey] = bitmap
+                    val bitmapTransformation = dynamicBitmapTransformation[forKey]
+                    if (bitmapTransformation != null) {
+                        val transformationBitmap = bitmapTransformation.transform(bitmap)
+                        dynamicImage[forKey] = transformationBitmap ?: bitmap
+                    } else {
+                        dynamicImage[forKey] = bitmap
+                    }
                     dynamicImageJob.remove(forKey)
                     invalidateCallback.invoke()
                 }
