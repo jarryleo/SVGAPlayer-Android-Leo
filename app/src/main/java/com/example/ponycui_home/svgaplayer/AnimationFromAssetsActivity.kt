@@ -26,24 +26,20 @@ class AnimationFromAssetsActivity : Activity() {
     }
 
     private fun loadAnimation() {
-        val name = "room_big_gift_level3.svga"
+        val name = "suofang.svga"
         val textSize = 14.dp.toFloat()
         animationView.load(name) {
-            val nick1 = "خدمة متجر جوجل غير متوفرة"
-            val nick2 = "FC0005"
+            val nick = "阿斯顿撒感觉"
             setDynamicText(
-                "name1",
+                "nick",
                 SVGATextEntity(
-                    nick1,
+                    nick,
                     textSize,
                 )
             )
-            setDynamicText(
-                "name2",
-                SVGATextEntity(
-                    nick2,
-                    textSize,
-                )
+            setDynamicImage(
+                "https://github.com/PonyCui/resources/blob/master/svga_replace_avatar.png?raw=true",
+                "sender_avatar"
             )
         }
     }
