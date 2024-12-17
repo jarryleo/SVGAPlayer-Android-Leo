@@ -13,6 +13,7 @@ import com.opensource.svgaplayer.download.BitmapDownloader
 import com.opensource.svgaplayer.entities.SVGATextEntity
 import com.opensource.svgaplayer.url.UrlDecoderManager
 import com.opensource.svgaplayer.utils.BitmapTransformation
+import com.opensource.svgaplayer.utils.roundToIntSafe
 import kotlinx.coroutines.Job
 import kotlin.math.roundToInt
 
@@ -169,7 +170,7 @@ class SVGADynamicEntity {
         dynamicTextScale[forKey] = textEntity.scale
         val text = textEntity.text
         val width = if (textEntity.ellipsize == TextUtils.TruncateAt.MARQUEE) {
-            textPaint.measureText(text).roundToInt()
+            textPaint.measureText(text).roundToIntSafe()
         } else {
             Int.MAX_VALUE
         }

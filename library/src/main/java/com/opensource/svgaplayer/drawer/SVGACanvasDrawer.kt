@@ -24,8 +24,9 @@ import android.widget.ImageView
 import com.opensource.svgaplayer.SVGADynamicEntity
 import com.opensource.svgaplayer.SVGAVideoEntity
 import com.opensource.svgaplayer.entities.SVGAVideoShapeEntity
+import com.opensource.svgaplayer.utils.maxOf
+import com.opensource.svgaplayer.utils.roundToIntSafe
 import kotlin.math.abs
-import kotlin.math.roundToInt
 import kotlin.math.sqrt
 
 /**
@@ -303,7 +304,7 @@ internal class SVGACanvasDrawer(
         val scaleY = ma[4]
         val rqWidth = sprite.frameEntity.layout.width * scaleX
         val rqHeight = sprite.frameEntity.layout.height * scaleY
-        return Size(rqWidth.roundToInt(), rqHeight.roundToInt())
+        return Size(rqWidth.roundToIntSafe(), rqHeight.roundToIntSafe())
     }
 
     private fun drawImage(sprite: SVGADrawerSprite, canvas: Canvas) {
@@ -345,7 +346,7 @@ internal class SVGACanvasDrawer(
         val paint = this.sharedValues.sharedPaint()
         paint.isAntiAlias = videoItem.antiAlias
         paint.isFilterBitmap = videoItem.antiAlias
-        paint.alpha = (sprite.frameEntity.alpha * 255).roundToInt()
+        paint.alpha = (sprite.frameEntity.alpha * 255).roundToIntSafe()
         if (sprite.frameEntity.maskPath != null) {
             val maskPath = sprite.frameEntity.maskPath ?: return
             canvas.save()
@@ -354,8 +355,8 @@ internal class SVGACanvasDrawer(
             path.transform(frameMatrix)
             canvas.clipPath(path)
             frameMatrix.preScale(
-                (sprite.frameEntity.layout.width / drawingBitmap.width).toFloat(),
-                (sprite.frameEntity.layout.height / drawingBitmap.height).toFloat()
+                (sprite.frameEntity.layout.width / drawingBitmap.width.maxOf(1)).toFloat(),
+                (sprite.frameEntity.layout.height / drawingBitmap.height.maxOf(1)).toFloat()
             )
             if (!drawingBitmap.isRecycled) {
                 canvas.drawBitmap(drawingBitmap, frameMatrix, paint)
@@ -363,8 +364,8 @@ internal class SVGACanvasDrawer(
             canvas.restore()
         } else {
             frameMatrix.preScale(
-                (sprite.frameEntity.layout.width / drawingBitmap.width).toFloat(),
-                (sprite.frameEntity.layout.height / drawingBitmap.height).toFloat()
+                (sprite.frameEntity.layout.width / drawingBitmap.width.maxOf(1)).toFloat(),
+                (sprite.frameEntity.layout.height / drawingBitmap.height.maxOf(1)).toFloat()
             )
             if (!drawingBitmap.isRecycled) {
                 canvas.drawBitmap(drawingBitmap, frameMatrix, paint)
@@ -373,12 +374,12 @@ internal class SVGACanvasDrawer(
         //绘制文本，每一帧的缩放不一样，文本大小按原图
         val matrixArray = floatArrayOf(0f, 0f, 0f, 0f, 0f, 0f, 0f, 0f, 0f)
         frameMatrix.getValues(matrixArray)
-        val x0 = matrixArray[2].roundToInt()
-        val y0 = matrixArray[5].roundToInt()
+        val x0 = matrixArray[2].roundToIntSafe()
+        val y0 = matrixArray[5].roundToIntSafe()
         val scaleX1 = matrixArray[0]
         val scaleY1 = matrixArray[4]
-        val x1 = (drawingBitmap.width * scaleX1 + x0).roundToInt()
-        val y1 = (drawingBitmap.height * scaleY1 + y0).roundToInt()
+        val x1 = (drawingBitmap.width * scaleX1 + x0).roundToIntSafe()
+        val y1 = (drawingBitmap.height * scaleY1 + y0).roundToIntSafe()
         val rect = Rect(x0, y0, x1, y1)
         //点击位置
         dynamicItem?.dynamicIClickArea.let {
@@ -456,11 +457,11 @@ internal class SVGACanvasDrawer(
                     Int.MAX_VALUE
                 }
                 //是否是跑马灯文本，是的话文本 bitmap 宽度为 textWidth，否则为 drawingBitmap 宽度
-                val scaleTextY = drawingBitmap.height.toFloat() / it.height
+                val scaleTextY = drawingBitmap.height.toFloat() / it.height.maxOf(1)
                 val backTextSize = it.paint.textSize
                 val textSize = backTextSize * scaleTextY
                 it.paint.textSize = textSize
-                val textWidth = it.paint.measureText(it.text, 0, it.text.length).roundToInt()
+                val textWidth = it.paint.measureText(it.text, 0, it.text.length).roundToIntSafe()
                 val isMarquee =
                     (lineMax == 1 && textWidth > drawingBitmap.width && it.width != Int.MAX_VALUE)
                 if (!isMarquee) {
@@ -493,8 +494,9 @@ internal class SVGACanvasDrawer(
                 drawTextRtlCache[imageKey] = layout.text.indices.any { layout.isRtlCharAt(it) }
                 if (isMarquee) {
                     val textScale = dynamicItem.dynamicTextScale[imageKey] ?: 1f
-                    val scaleY = (drawingBitmap.height.toFloat() / layout.height) * textScale //内边距
-                    val bitmapWidth = (targetWidth * scaleY).roundToInt()
+                    val scaleY =
+                        (drawingBitmap.height.toFloat() / layout.height.maxOf(1)) * textScale //内边距
+                    val bitmapWidth = (targetWidth * scaleY).roundToIntSafe()
                     val bitmapHeight = drawingBitmap.height
                     val bitmap = Bitmap.createBitmap(
                         bitmapWidth, bitmapHeight, Bitmap.Config.ARGB_8888
@@ -511,7 +513,8 @@ internal class SVGACanvasDrawer(
                     textBitmap = bitmap
                     val textCanvas = Canvas(bitmap)
                     val textScale = dynamicItem.dynamicTextScale[imageKey] ?: 1f
-                    val scale = drawingBitmap.height / layout.height.toFloat() * textScale //内边距
+                    val scale =
+                        drawingBitmap.height / layout.height.toFloat().maxOf(1f) * textScale //内边距
                     if (scale < 5f && layout.lineCount == 1) {
                         val tansX = -(layout.width * scale - drawingBitmap.width) / 2f
                         val tansY = -(layout.height * scale - drawingBitmap.height) / 2f
@@ -528,7 +531,7 @@ internal class SVGACanvasDrawer(
         textBitmap?.let { bitmap ->
             val paint = this.sharedValues.sharedPaint()
             paint.isAntiAlias = videoItem.antiAlias
-            paint.alpha = (sprite.frameEntity.alpha * 255).roundToInt()
+            paint.alpha = (sprite.frameEntity.alpha * 255).roundToIntSafe()
             if (sprite.frameEntity.maskPath != null) {
                 val maskPath = sprite.frameEntity.maskPath ?: return@let
                 canvas.save()
@@ -577,23 +580,23 @@ internal class SVGACanvasDrawer(
         val fps = videoItem.FPS
         //每秒偏移dp，计算每帧需要偏移多少dp
         val density = Resources.getSystem().displayMetrics.density
-        val speed = maxOf(15f * density / fps, 1f)
+        val speed = maxOf(15f * density / fps.maxOf(1), 1f)
         val defOffset = -speed * fps //停顿1秒
         //每帧偏移量
         var offsetX = drawTextOffsetCache[imageKey] ?: defOffset
         offsetX += speed
         //截取文字的起始点，如果是rtl，从右侧开始
         val srcStart = if (isRtl) {
-            minOf(bitmap.width.toFloat(), bitmap.width - offsetX).roundToInt()
+            minOf(bitmap.width.toFloat(), bitmap.width - offsetX).roundToIntSafe()
         } else {
-            maxOf(0f, offsetX).roundToInt()
+            maxOf(0f, offsetX).roundToIntSafe()
         }
         //需要截取的宽度
         val cutWidth = if (isRtl)
-            minOf(rect.width(), (srcStart * scaleX).roundToInt())
+            minOf(rect.width(), (srcStart * scaleX).roundToIntSafe())
         else
-            minOf(rect.width(), ((bitmap.width - srcStart) * scaleX).roundToInt())
-        val srcWidth = (cutWidth.toFloat() / scaleX).roundToInt()
+            minOf(rect.width(), ((bitmap.width - srcStart) * scaleX).roundToIntSafe())
+        val srcWidth = (cutWidth.toFloat() / scaleX.maxOf(1f)).roundToIntSafe()
         val srcEnd = if (isRtl) srcStart - srcWidth else srcStart + srcWidth
         //绘制原始文本 还未显示到结尾就是全部文本
         if (cutWidth > 0) {
@@ -615,11 +618,11 @@ internal class SVGACanvasDrawer(
         //绘制首尾相接部分的下一段首部文本
         val spaceWidth =
             minOf(
-                (rect.width() / 3f).roundToInt(),
-                (marqueeLinearGradientWidth * 2).roundToInt()
+                (rect.width() / 3f).roundToIntSafe(),
+                (marqueeLinearGradientWidth * 2).roundToIntSafe()
             ) // 首尾相接中间空余
         val lastCutWidth = minOf(leftSpace - spaceWidth, rect.width()) //右侧需要绘制的文本宽度
-        val lastWidth = (lastCutWidth.toFloat() / scaleX).roundToInt()
+        val lastWidth = (lastCutWidth.toFloat() / scaleX.maxOf(1f)).roundToIntSafe()
         if (leftSpace > spaceWidth) { //如果右边空余超过一半，绘制右边文本
             val srcRect =
                 Rect(
@@ -670,7 +673,7 @@ internal class SVGACanvasDrawer(
                 val paint = this.sharedValues.sharedPaint()
                 paint.reset()
                 paint.isAntiAlias = videoItem.antiAlias
-                paint.alpha = (sprite.frameEntity.alpha * 255).roundToInt()
+                paint.alpha = (sprite.frameEntity.alpha * 255).roundToIntSafe()
                 val path = this.sharedValues.sharedPath()
                 path.reset()
                 path.addPath(this.pathCache.buildPath(shape))
@@ -686,7 +689,7 @@ internal class SVGACanvasDrawer(
                         paint.style = Paint.Style.FILL
                         paint.color = it
                         val alpha =
-                            255.coerceAtMost(0.coerceAtLeast((sprite.frameEntity.alpha * 255).roundToInt()))
+                            255.coerceAtMost(0.coerceAtLeast((sprite.frameEntity.alpha * 255).roundToIntSafe()))
                         if (alpha != 255) {
                             paint.alpha = alpha
                         }
@@ -703,12 +706,12 @@ internal class SVGACanvasDrawer(
                 }
                 shape.styles?.strokeWidth?.let { strokeWidth ->
                     if (strokeWidth > 0) {
-                        paint.alpha = (sprite.frameEntity.alpha * 255).roundToInt()
+                        paint.alpha = (sprite.frameEntity.alpha * 255).roundToIntSafe()
                         paint.style = Paint.Style.STROKE
                         shape.styles?.stroke?.let {
                             paint.color = it
                             val alpha = 255.coerceAtMost(
-                                0.coerceAtLeast((sprite.frameEntity.alpha * 255).roundToInt())
+                                0.coerceAtLeast((sprite.frameEntity.alpha * 255).roundToIntSafe())
                             )
                             if (alpha != 255) {
                                 paint.alpha = alpha
@@ -808,8 +811,8 @@ internal class SVGACanvasDrawer(
             it.invoke(
                 canvas,
                 frameIndex,
-                sprite.frameEntity.layout.width.roundToInt(),
-                sprite.frameEntity.layout.height.roundToInt()
+                sprite.frameEntity.layout.width.roundToIntSafe(),
+                sprite.frameEntity.layout.height.roundToIntSafe()
             )
             canvas.restore()
         }
