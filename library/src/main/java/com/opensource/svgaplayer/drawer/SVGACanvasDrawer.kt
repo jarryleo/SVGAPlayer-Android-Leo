@@ -255,8 +255,15 @@ internal class SVGACanvasDrawer(
     /**
      * 是否是需要替换的动态图key
      */
-    private fun isReplaceBitmap(imageKey: String): Boolean {
+    private fun isReplaceImage(imageKey: String): Boolean {
         return dynamicItem?.isDynamicImage(imageKey) == true
+    }
+
+    /**
+     * 是否是需要替换的动态文本key
+     */
+    private fun isReplaceText(imageKey: String): Boolean {
+        return dynamicItem?.isDynamicText(imageKey) == true
     }
 
     private fun Size.area() = width * height
@@ -308,20 +315,32 @@ internal class SVGACanvasDrawer(
         val bitmapKey = if (imageKey.endsWith(".matte")) imageKey.substring(
             0, imageKey.length - 6
         ) else imageKey
-        val isReplace = isReplaceBitmap(imageKey)
         //原图的bitmap
-        val placeHolderBitmap = videoItem.imageMap[bitmapKey]
+        var placeHolderBitmap = videoItem.imageMap[bitmapKey]
         //需要绘制的bitmap
-        val drawingBitmap = if (isReplace) {
+        val drawingBitmap = if (isReplaceImage(imageKey)) {
             val size = getSpriteMaxSize(bitmapKey) //需要修改为最大尺寸
             //替换后的bitmap
             val replaceBitmap = dynamicItem?.requestImage(
                 bitmapKey, size.width, size.height
             )
             (replaceBitmap ?: placeHolderBitmap)
+        } else if (isReplaceText(imageKey)) {
+            val size = getSpriteMaxSize(bitmapKey) //需要修改为最大尺寸
+            //替换最大尺寸占位图，
+            if (placeHolderBitmap != null) {
+                val placeHolderArea = placeHolderBitmap.width * placeHolderBitmap.height
+                if (size.area() > placeHolderArea) {
+                    val bitmap = Bitmap.createBitmap(size.width, size.height, Bitmap.Config.ALPHA_8)
+                    placeHolderBitmap = bitmap
+                    videoItem.imageMap[bitmapKey] = bitmap
+                }
+            }
+            placeHolderBitmap
         } else {
             placeHolderBitmap
-        } ?: return
+        }
+        if (drawingBitmap == null) return
         val frameMatrix = shareFrameMatrix(sprite.frameEntity.transform)
         val paint = this.sharedValues.sharedPaint()
         paint.isAntiAlias = videoItem.antiAlias
@@ -442,7 +461,6 @@ internal class SVGACanvasDrawer(
                 val textSize = backTextSize * scaleTextY
                 it.paint.textSize = textSize
                 val textWidth = it.paint.measureText(it.text, 0, it.text.length).roundToInt()
-                it.paint.textSize = backTextSize
                 val isMarquee =
                     (lineMax == 1 && textWidth > drawingBitmap.width && it.width != Int.MAX_VALUE)
                 if (!isMarquee) {

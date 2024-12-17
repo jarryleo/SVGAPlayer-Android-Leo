@@ -27,15 +27,11 @@ class AnimationFromAssetsActivity : Activity() {
 
     private fun loadAnimation() {
         val name = "suofang.svga"
-        val textSize = 14.dp.toFloat()
         animationView.load(name) {
             val nick = "阿斯顿撒感觉"
             setDynamicText(
                 "nick",
-                SVGATextEntity(
-                    nick,
-                    textSize,
-                )
+                SVGATextEntity(nick)
             )
             setDynamicImage(
                 "https://github.com/PonyCui/resources/blob/master/svga_replace_avatar.png?raw=true",

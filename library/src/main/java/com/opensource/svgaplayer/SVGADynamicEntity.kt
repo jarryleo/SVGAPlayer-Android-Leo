@@ -70,7 +70,17 @@ class SVGADynamicEntity {
      * 判断key是否是动态图
      */
     fun isDynamicImage(forKey: String): Boolean {
-        return dynamicImageUrl.containsKey(forKey) || dynamicImage.containsKey(forKey)
+        return dynamicImageUrl.containsKey(forKey)
+                || dynamicImage.containsKey(forKey)
+    }
+
+    /**
+     * 判断是否是动态文本
+     */
+    fun isDynamicText(forKey: String): Boolean {
+        return dynamicText.containsKey(forKey)
+                || dynamicStaticLayoutText.containsKey(forKey)
+                || dynamicBoringLayoutText.containsKey(forKey)
     }
 
     /**
@@ -84,7 +94,11 @@ class SVGADynamicEntity {
      * 从网络加载图片
      */
     @JvmOverloads
-    fun setDynamicImage(url: String, forKey: String, bitmapTransformation: BitmapTransformation? = null) {
+    fun setDynamicImage(
+        url: String,
+        forKey: String,
+        bitmapTransformation: BitmapTransformation? = null
+    ) {
         dynamicImageUrl[forKey] = url
         bitmapTransformation?.let {
             dynamicBitmapTransformation[forKey] = bitmapTransformation
