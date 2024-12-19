@@ -461,11 +461,12 @@ internal class SVGACanvasDrawer(
                 val backTextSize = it.paint.textSize
                 val textSize = backTextSize * scaleTextY
                 it.paint.textSize = textSize
-                val textWidth = it.paint.measureText(it.text, 0, it.text.length).roundToIntSafe()
+                var textWidth = it.paint.measureText(it.text, 0, it.text.length).roundToIntSafe()
                 val isMarquee =
                     (lineMax == 1 && textWidth > drawingBitmap.width && it.width != Int.MAX_VALUE)
                 if (!isMarquee) {
                     it.paint.textSize = backTextSize
+                    textWidth = it.paint.measureText(it.text, 0, it.text.length).roundToIntSafe()
                 }
                 drawTextMarqueeCache[imageKey] = isMarquee
                 val targetWidth = if (isMarquee) textWidth else drawingBitmap.width
@@ -514,8 +515,12 @@ internal class SVGACanvasDrawer(
                     val textCanvas = Canvas(bitmap)
                     val textScale = dynamicItem.dynamicTextScale[imageKey] ?: 1f
                     val scale =
-                        drawingBitmap.height / layout.height.toFloat().maxOf(1f) * textScale //内边距
-                    if (scale < 5f && layout.lineCount == 1) {
+                        drawingBitmap.height * 1f / layout.height.maxOf(1) * textScale //内边距
+                    if (layout.lineCount == 1
+                        && textWidth * scale <= drawingBitmap.width
+                        && layout.height * scale <= drawingBitmap.height
+                    ) {
+                        //单行文本填充，不受字体大小控制
                         val tansX = -(layout.width * scale - drawingBitmap.width) / 2f
                         val tansY = -(layout.height * scale - drawingBitmap.height) / 2f
                         textCanvas.translate(tansX, tansY)
@@ -596,7 +601,7 @@ internal class SVGACanvasDrawer(
             minOf(rect.width(), (srcStart * scaleX).roundToIntSafe())
         else
             minOf(rect.width(), ((bitmap.width - srcStart) * scaleX).roundToIntSafe())
-        val srcWidth = (cutWidth.toFloat() / scaleX.maxOf(1f)).roundToIntSafe()
+        val srcWidth = (cutWidth.toFloat() / scaleX).roundToIntSafe()
         val srcEnd = if (isRtl) srcStart - srcWidth else srcStart + srcWidth
         //绘制原始文本 还未显示到结尾就是全部文本
         if (cutWidth > 0) {
@@ -622,7 +627,7 @@ internal class SVGACanvasDrawer(
                 (marqueeLinearGradientWidth * 2).roundToIntSafe()
             ) // 首尾相接中间空余
         val lastCutWidth = minOf(leftSpace - spaceWidth, rect.width()) //右侧需要绘制的文本宽度
-        val lastWidth = (lastCutWidth.toFloat() / scaleX.maxOf(1f)).roundToIntSafe()
+        val lastWidth = (lastCutWidth.toFloat() / scaleX).roundToIntSafe()
         if (leftSpace > spaceWidth) { //如果右边空余超过一半，绘制右边文本
             val srcRect =
                 Rect(
