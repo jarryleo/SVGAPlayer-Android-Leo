@@ -560,7 +560,7 @@ open class SVGAImageView @JvmOverloads constructor(
 
     override fun onLayout(changed: Boolean, left: Int, top: Int, right: Int, bottom: Int) {
         super.onLayout(changed, left, top, right, bottom)
-        if (changed && width > 0 && height > 0 && lastSource != null) {
+        if (changed && width > 0 && height > 0 && lastSource != null && !isAnimating) {
             parserSource(lastSource, lastConfig)
         }
     }
