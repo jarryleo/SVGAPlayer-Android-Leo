@@ -1,5 +1,6 @@
 package com.opensource.svgaplayer
 
+import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Paint
@@ -8,19 +9,22 @@ import android.text.BoringLayout
 import android.text.StaticLayout
 import android.text.TextPaint
 import android.text.TextUtils
+import com.opensource.svgaplayer.bitmap.SVGABitmapFileDecoder
+import com.opensource.svgaplayer.bitmap.SVGABitmapInputStreamDecoder
+import com.opensource.svgaplayer.bitmap.SVGABitmapResDecoder
 import com.opensource.svgaplayer.coroutine.SvgaCoroutineManager
 import com.opensource.svgaplayer.download.BitmapDownloader
 import com.opensource.svgaplayer.entities.SVGATextEntity
 import com.opensource.svgaplayer.url.UrlDecoderManager
 import com.opensource.svgaplayer.utils.BitmapTransformation
+import com.opensource.svgaplayer.utils.SourceUtil
 import com.opensource.svgaplayer.utils.roundToIntSafe
 import kotlinx.coroutines.Job
-import kotlin.math.roundToInt
 
 /**
  * Created by cuiminghui on 2017/3/30.
  */
-class SVGADynamicEntity {
+class SVGADynamicEntity(val context: Context) {
     internal var invalidateCallback: () -> Unit = {}
 
     internal var dynamicHidden: HashMap<String, Boolean> = hashMapOf()
@@ -28,6 +32,8 @@ class SVGADynamicEntity {
     private var dynamicImage: HashMap<String, Bitmap> = hashMapOf()
 
     private var dynamicImageUrl: HashMap<String, String> = hashMapOf()
+
+    private var dynamicImageResId: HashMap<String, Int> = hashMapOf()
 
     private var dynamicBitmapTransformation: HashMap<String, BitmapTransformation> = hashMapOf()
 
@@ -72,6 +78,7 @@ class SVGADynamicEntity {
      */
     fun isDynamicImage(forKey: String): Boolean {
         return dynamicImageUrl.containsKey(forKey)
+                || dynamicImageResId.containsKey(forKey)
                 || dynamicImage.containsKey(forKey)
     }
 
@@ -106,6 +113,21 @@ class SVGADynamicEntity {
         }
     }
 
+    /**
+     * 从资源id加载图片
+     */
+    @JvmOverloads
+    fun setDynamicImage(
+        resId: Int,
+        forKey: String,
+        bitmapTransformation: BitmapTransformation? = null
+    ) {
+        dynamicImageResId[forKey] = resId
+        bitmapTransformation?.let {
+            dynamicBitmapTransformation[forKey] = bitmapTransformation
+        }
+    }
+
     fun requestImage(forKey: String, width: Int, height: Int): Bitmap? {
         val value = dynamicImage[forKey]
         if (value != null) {
@@ -116,7 +138,8 @@ class SVGADynamicEntity {
             }
         }
         val url = dynamicImageUrl[forKey]
-        if (url != null) {
+        val resId = dynamicImageResId[forKey]
+        if (url != null || resId != null) {
             dynamicImageJob[forKey]?.let {
                 if (it.isActive) {
                     return null
@@ -124,9 +147,26 @@ class SVGADynamicEntity {
                     dynamicImageJob.remove(forKey)
                 }
             }
-            val realUrl = UrlDecoderManager.getUrlDecoder().decodeImageUrl(url, width, height)
             val job = SvgaCoroutineManager.launchIo {
-                val bitmap = BitmapDownloader.downloadBitmap(realUrl, width, height)
+                var bitmap: Bitmap? = null
+                if (url != null) {
+                    val realUrl =
+                        UrlDecoderManager.getUrlDecoder().decodeImageUrl(url, width, height)
+                    bitmap = if (SourceUtil.isUrl(realUrl)) {
+                        BitmapDownloader.downloadBitmap(realUrl, width, height)
+                    } else if (SourceUtil.isFilePath(realUrl)) {
+                        SVGABitmapFileDecoder.decodeBitmapFrom(realUrl, width, height)
+                    } else {
+                        SVGABitmapInputStreamDecoder.decodeBitmapFrom(
+                            context.assets.open(realUrl),
+                            width,
+                            height
+                        )
+                    }
+                } else if (resId != null) {
+                    bitmap = SVGABitmapResDecoder(context).decodeBitmapFrom(resId, width, height)
+                }
+
                 if (bitmap != null) {
                     val bitmapTransformation = dynamicBitmapTransformation[forKey]
                     if (bitmapTransformation != null) {
@@ -267,6 +307,7 @@ class SVGADynamicEntity {
         }
         this.dynamicImage.clear()
         this.dynamicImageUrl.clear()
+        this.dynamicImageResId.clear()
         this.dynamicImageJob.forEach {
             if (it.value.isActive) {
                 it.value.cancel()
