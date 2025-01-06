@@ -22,7 +22,7 @@ class SVGAMemoryCache(private val cacheLimit: Int = 5) {
                 newValue: WeakReference<SVGAVideoEntity>?
             ) {
                 if (evicted) {
-                    oldValue?.get()?.clear()
+                    //oldValue?.get()?.clear() //fix :内存占用过高时候可能回收正在展示的svga导致空白
                     oldValue?.clear()
                 }
             }
