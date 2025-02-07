@@ -128,7 +128,7 @@ open class SVGAImageView @JvmOverloads constructor(
             return this
         }
         //已有宽高才加载动画
-        if (width > 0 && height > 0) {
+        if ((width > 0 && height > 0) || config?.isOriginal == true) {
             parserSource(source, config)
         } else {
             requestLayout()

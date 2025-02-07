@@ -244,12 +244,11 @@ class SVGAParser private constructor(context: Context) {
                 this.invokeErrorCallback(it, callback, alias = urlPath)
             })
         }.apply {
-            LogUtils.info(
-                TAG,
-                "================ decode from url canceled: $urlPath ================"
-            )
             invokeOnCompletion { exception ->
                 if (exception is CancellationException) {
+                    LogUtils.info(
+                        TAG, "================ decode from url canceled: $urlPath ================"
+                    )
                     memoryCacheKey?.let { SVGAMemoryLoadingQueue.removeItem(memoryCacheKey) }
                 }
             }
