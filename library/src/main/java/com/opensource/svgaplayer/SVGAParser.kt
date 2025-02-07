@@ -26,6 +26,7 @@ import java.net.URL
 import java.util.concurrent.ThreadPoolExecutor
 import java.util.zip.InflaterInputStream
 import java.util.zip.ZipInputStream
+import kotlin.coroutines.cancellation.CancellationException
 
 /**
  * Created by PonyCui 16/6/18.
@@ -242,6 +243,16 @@ class SVGAParser private constructor(context: Context) {
             }, {
                 this.invokeErrorCallback(it, callback, alias = urlPath)
             })
+        }.apply {
+            LogUtils.info(
+                TAG,
+                "================ decode from url canceled: $urlPath ================"
+            )
+            invokeOnCompletion { exception ->
+                if (exception is CancellationException) {
+                    memoryCacheKey?.let { SVGAMemoryLoadingQueue.removeItem(memoryCacheKey) }
+                }
+            }
         }
     }
 
