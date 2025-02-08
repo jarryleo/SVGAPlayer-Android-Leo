@@ -24,13 +24,16 @@ import java.net.URLDecoder
  * Created by PonyCui on 2017/3/29.
  * Modified by leo on 2024/7/1.
  */
+@SuppressLint("ObsoleteSdkInt")
 open class SVGAImageView @JvmOverloads constructor(
     context: Context,
     attrs: AttributeSet? = null,
     defStyleAttr: Int = 0
 ) : ImageView(context, attrs, defStyleAttr) {
 
-    private val TAG = "SVGAImageView"
+    companion object {
+        private const val TAG = "SVGAImageView"
+    }
 
     enum class FillMode {
         Backward, //动画结束后显示最后一帧
@@ -57,8 +60,8 @@ open class SVGAImageView @JvmOverloads constructor(
     private var mItemClickAreaListener: SVGAClickAreaListener? = null
     private var mAntiAlias = true
     private var mAutoPlay = true
-    private val mAnimatorListener = AnimatorListener(this)
-    private val mAnimatorUpdateListener = AnimatorUpdateListener(this)
+    private val mAnimatorListener by lazy { AnimatorListener(this) }
+    private val mAnimatorUpdateListener by lazy { AnimatorUpdateListener(this) }
     private var mStartFrame = 0
     private var mEndFrame = 0
     private var volume = 1f
@@ -224,11 +227,11 @@ open class SVGAImageView @JvmOverloads constructor(
         }
     }
 
-    fun startAnimation() {
+    open fun startAnimation() {
         startAnimation(null, false)
     }
 
-    fun startAnimation(range: SVGARange?, reverse: Boolean = false) {
+    open fun startAnimation(range: SVGARange?, reverse: Boolean = false) {
         stopAnimation(false)
         play(range, reverse)
     }
@@ -266,7 +269,7 @@ open class SVGAImageView @JvmOverloads constructor(
     /**
      * 获取svga动画所占用的真实内存
      */
-    fun getSvgaMemorySize(): Long {
+    open fun getSvgaMemorySize(): Long {
         val svgaMemorySize = getSVGADrawable()?.videoItem?.getMemorySize() ?: 0
         val dynamicMemorySize = getSVGADrawable()?.dynamicItem?.getMemorySize() ?: 0
         return svgaMemorySize + dynamicMemorySize
@@ -275,7 +278,7 @@ open class SVGAImageView @JvmOverloads constructor(
     /**
      * 获取svga动画所占用的内存格式化字符串
      */
-    fun getSvgaMemorySizeFormat(): String {
+    open fun getSvgaMemorySizeFormat(): String {
         //格式化动画占用内存字符串，显示详细的内存占用情况
         val svgaMemorySize = getSvgaMemorySize()
         return Formatter.formatFileSize(context, svgaMemorySize)
@@ -326,18 +329,18 @@ open class SVGAImageView @JvmOverloads constructor(
         callback?.onStep(drawable.currentFrame, percentage)
     }
 
-    fun onAnimationStart(animation: Animator?) {
+    open fun onAnimationStart(animation: Animator?) {
         loadingSource = null
         isAnimating = true
         callback?.onStart()
     }
 
-    fun onAnimationCancel(animation: Animator?) {
+    open fun onAnimationCancel(animation: Animator?) {
         isAnimating = false
         callback?.onCancel()
     }
 
-    private fun onAnimationEnd(animation: Animator?) {
+    open fun onAnimationEnd(animation: Animator?) {
         isAnimating = false
         stopAnimation()
         val drawable = getSVGADrawable()
@@ -360,7 +363,7 @@ open class SVGAImageView @JvmOverloads constructor(
         callback?.onFinished()
     }
 
-    fun clear() {
+    open fun clear() {
         getSVGADrawable()?.cleared = true
         getSVGADrawable()?.clear()
         //清理动态添加的数据
@@ -372,7 +375,7 @@ open class SVGAImageView @JvmOverloads constructor(
         LogUtils.debug(TAG, "clear last source: $lastSource")
     }
 
-    fun clearLastSource() {
+    open fun clearLastSource() {
         lastSource = null
     }
 
@@ -398,29 +401,29 @@ open class SVGAImageView @JvmOverloads constructor(
     /**
      * 设置动画音量
      */
-    fun setVolume(volume: Float) {
+    open fun setVolume(volume: Float) {
         val fixVolume = volume.coerceIn(0f, 1f)
         this.volume = fixVolume
         getSVGADrawable()?.setVolume(fixVolume)
     }
 
-    fun pauseAnimation() {
+    open fun pauseAnimation() {
         mAnimator?.pause()
         getSVGADrawable()?.pause()
         callback?.onPause()
     }
 
-    fun resumeAnimation() {
+    open fun resumeAnimation() {
         mAnimator?.resume()
         getSVGADrawable()?.resume()
         callback?.onResume()
     }
 
-    fun stopAnimation() {
+    open fun stopAnimation() {
         stopAnimation(clear = clearsAfterStop)
     }
 
-    fun stopAnimation(clear: Boolean) {
+    open fun stopAnimation(clear: Boolean) {
         mAnimator?.cancel()
         mAnimator?.removeAllListeners()
         mAnimator?.removeAllUpdateListeners()
@@ -432,11 +435,11 @@ open class SVGAImageView @JvmOverloads constructor(
         }
     }
 
-    fun setVideoItem(videoItem: SVGAVideoEntity?) {
+    open fun setVideoItem(videoItem: SVGAVideoEntity?) {
         setVideoItem(videoItem, SVGADynamicEntity(context))
     }
 
-    fun setVideoItem(videoItem: SVGAVideoEntity?, dynamicItem: SVGADynamicEntity?) {
+    open fun setVideoItem(videoItem: SVGAVideoEntity?, dynamicItem: SVGADynamicEntity?) {
         if (videoItem == null) {
             setImageDrawable(null)
         } else {
@@ -449,7 +452,7 @@ open class SVGAImageView @JvmOverloads constructor(
         }
     }
 
-    fun stepToFrame(frame: Int, andPlay: Boolean) {
+    open fun stepToFrame(frame: Int, andPlay: Boolean) {
         stopAnimation(false)
         val drawable = getSVGADrawable()
         if (drawable == null) {
@@ -471,7 +474,7 @@ open class SVGAImageView @JvmOverloads constructor(
         }
     }
 
-    fun stepToPercentage(percentage: Double, andPlay: Boolean) {
+    open fun stepToPercentage(percentage: Double, andPlay: Boolean) {
         val drawable = drawable as? SVGADrawable ?: return
         var frame = (drawable.videoItem.frames * percentage).toInt()
         if (frame >= drawable.videoItem.frames && frame > 0) {
@@ -480,7 +483,7 @@ open class SVGAImageView @JvmOverloads constructor(
         stepToFrame(frame, andPlay)
     }
 
-    fun setOnAnimKeyClickListener(clickListener: SVGAClickAreaListener) {
+    open fun setOnAnimKeyClickListener(clickListener: SVGAClickAreaListener) {
         mItemClickAreaListener = clickListener
     }
 
@@ -544,7 +547,7 @@ open class SVGAImageView @JvmOverloads constructor(
         return true
     }
 
-    fun getLastSource(): String? {
+    open fun getLastSource(): String? {
         return lastSource
     }
 
