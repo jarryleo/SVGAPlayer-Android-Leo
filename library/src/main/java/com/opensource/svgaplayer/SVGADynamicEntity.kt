@@ -20,6 +20,8 @@ import com.opensource.svgaplayer.utils.BitmapTransformation
 import com.opensource.svgaplayer.utils.SourceUtil
 import com.opensource.svgaplayer.utils.roundToIntSafe
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.isActive
+import java.util.concurrent.ConcurrentHashMap
 
 /**
  * Created by cuiminghui on 2017/3/30.
@@ -27,37 +29,41 @@ import kotlinx.coroutines.Job
 class SVGADynamicEntity(val context: Context) {
     internal var invalidateCallback: () -> Unit = {}
 
-    internal var dynamicHidden: HashMap<String, Boolean> = hashMapOf()
+    internal var dynamicHidden: ConcurrentHashMap<String, Boolean> = ConcurrentHashMap()
 
-    private var dynamicImage: HashMap<String, Bitmap> = hashMapOf()
+    private var dynamicImage: ConcurrentHashMap<String, Bitmap> = ConcurrentHashMap()
 
-    private var dynamicImageUrl: HashMap<String, String> = hashMapOf()
+    private var dynamicImageUrl: ConcurrentHashMap<String, String> = ConcurrentHashMap()
 
-    private var dynamicImageResId: HashMap<String, Int> = hashMapOf()
+    private var dynamicImageResId: ConcurrentHashMap<String, Int> = ConcurrentHashMap()
 
-    private var dynamicBitmapTransformation: HashMap<String, BitmapTransformation> = hashMapOf()
+    private var dynamicBitmapTransformation: ConcurrentHashMap<String, BitmapTransformation> =
+        ConcurrentHashMap()
 
-    private var dynamicImageJob: HashMap<String, Job> = hashMapOf()
+    private var dynamicImageJob: ConcurrentHashMap<String, Job> = ConcurrentHashMap()
 
-    internal var dynamicText: HashMap<String, String> = hashMapOf()
+    internal var dynamicText: ConcurrentHashMap<String, String> = ConcurrentHashMap()
 
-    internal var dynamicTextScale: HashMap<String, Float> = hashMapOf()
+    internal var dynamicTextScale: ConcurrentHashMap<String, Float> = ConcurrentHashMap()
 
-    internal var dynamicTextPaint: HashMap<String, TextPaint> = hashMapOf()
+    internal var dynamicTextPaint: ConcurrentHashMap<String, TextPaint> = ConcurrentHashMap()
 
-    internal var dynamicStaticLayoutText: HashMap<String, StaticLayout> = hashMapOf()
+    internal var dynamicStaticLayoutText: ConcurrentHashMap<String, StaticLayout> =
+        ConcurrentHashMap()
 
-    internal var dynamicBoringLayoutText: HashMap<String, BoringLayout> = hashMapOf()
+    internal var dynamicBoringLayoutText: ConcurrentHashMap<String, BoringLayout> =
+        ConcurrentHashMap()
 
-    internal var dynamicDrawer: HashMap<String, (canvas: Canvas, frameIndex: Int) -> Boolean> =
-        hashMapOf()
+    internal var dynamicDrawer: ConcurrentHashMap<String, (canvas: Canvas, frameIndex: Int) -> Boolean> =
+        ConcurrentHashMap()
 
     //点击事件回调map
-    internal var mClickMap: HashMap<String, IntArray> = hashMapOf()
-    internal var dynamicIClickArea: HashMap<String, IClickAreaListener> = hashMapOf()
+    internal var mClickMap: ConcurrentHashMap<String, IntArray> = ConcurrentHashMap()
+    internal var dynamicIClickArea: ConcurrentHashMap<String, IClickAreaListener> =
+        ConcurrentHashMap()
 
-    internal var dynamicDrawerSized: HashMap<String, (canvas: Canvas, frameIndex: Int, width: Int, height: Int) -> Boolean> =
-        hashMapOf()
+    internal var dynamicDrawerSized: ConcurrentHashMap<String, (canvas: Canvas, frameIndex: Int, width: Int, height: Int) -> Boolean> =
+        ConcurrentHashMap()
 
     internal var isTextDirty = false
 
@@ -167,7 +173,7 @@ class SVGADynamicEntity(val context: Context) {
                     bitmap = SVGABitmapResDecoder(context).decodeBitmapFrom(resId, width, height)
                 }
 
-                if (bitmap != null) {
+                if (bitmap != null && isActive) {
                     val bitmapTransformation = dynamicBitmapTransformation[forKey]
                     if (bitmapTransformation != null) {
                         val transformationBitmap = bitmapTransformation.transform(bitmap)
@@ -296,6 +302,11 @@ class SVGADynamicEntity(val context: Context) {
     }
 
     fun clearDynamicObjects() {
+        this.dynamicImageJob.forEach {
+            if (it.value.isActive) {
+                it.value.cancel()
+            }
+        }
         this.isTextDirty = true
         this.dynamicHidden.clear()
         if (isAutoRecycleBitmap) {
@@ -308,11 +319,6 @@ class SVGADynamicEntity(val context: Context) {
         this.dynamicImage.clear()
         this.dynamicImageUrl.clear()
         this.dynamicImageResId.clear()
-        this.dynamicImageJob.forEach {
-            if (it.value.isActive) {
-                it.value.cancel()
-            }
-        }
         this.dynamicImageJob.clear()
         this.dynamicText.clear()
         this.dynamicTextScale.clear()

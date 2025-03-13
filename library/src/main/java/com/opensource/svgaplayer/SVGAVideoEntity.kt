@@ -211,7 +211,7 @@ class SVGAVideoEntity {
 
     private fun setupAudios(entity: MovieEntity, completionBlock: () -> Unit) {
         if (entity.audios.isNullOrEmpty()) {
-            run(completionBlock)
+            completionBlock.invoke()
             return
         }
         setupSoundPool(entity, completionBlock)
@@ -219,7 +219,7 @@ class SVGAVideoEntity {
         //repair when audioEntity error can not callback
         //如果audiosFileMap为空 soundPool?.load 不会走 导致 setOnLoadCompleteListener 不会回调 导致外层prepare不回调卡住
         if (audiosFileMap.isEmpty()) {
-            run(completionBlock)
+            completionBlock.invoke()
             return
         }
         this.audioList = entity.audios.map { audio ->
@@ -308,6 +308,11 @@ class SVGAVideoEntity {
         var soundLoaded = 0
         soundPool = generateSoundPool(entity)
         LogUtils.info("SVGAParser", "pool_start")
+        if (soundPool == null){
+            LogUtils.info("SVGAParser", "pool_null")
+            completionBlock()
+            return
+        }
         soundPool?.setOnLoadCompleteListener { _, _, _ ->
             LogUtils.info("SVGAParser", "pool_complete")
             soundLoaded++
