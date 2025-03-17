@@ -8,6 +8,7 @@ import android.os.Build
 import com.opensource.svgaplayer.bitmap.SVGABitmapByteArrayDecoder
 import com.opensource.svgaplayer.bitmap.SVGABitmapFileDecoder
 import com.opensource.svgaplayer.cache.SVGAFileCache
+import com.opensource.svgaplayer.coroutine.SvgaCoroutineManager
 import com.opensource.svgaplayer.entities.SVGAAudioEntity
 import com.opensource.svgaplayer.entities.SVGAVideoSpriteEntity
 import com.opensource.svgaplayer.proto.AudioEntity
@@ -15,10 +16,13 @@ import com.opensource.svgaplayer.proto.MovieEntity
 import com.opensource.svgaplayer.proto.MovieParams
 import com.opensource.svgaplayer.utils.SVGARect
 import com.opensource.svgaplayer.utils.log.LogUtils
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.delay
 import org.json.JSONObject
 import java.io.File
 import java.io.FileInputStream
 import java.io.FileOutputStream
+import java.util.concurrent.atomic.AtomicReference
 
 /**
  * Created by PonyCui on 16/6/18.
@@ -42,14 +46,19 @@ class SVGAVideoEntity {
     internal var spriteList: List<SVGAVideoSpriteEntity> = emptyList()
     internal var audioList: List<SVGAAudioEntity> = emptyList()
     internal var soundPool: SoundPool? = null
+
     //主体 bitmap 内存大户
     internal var imageMap = HashMap<String, Bitmap>()
     private var mCacheDir: File
     private var mFrameHeight = 0
     private var mFrameWidth = 0
+
     //这里可能会持有外部View，如果内存缓存会导致泄漏
     private var mPlayCallback: SVGAParser.PlayCallback? = null
-    private lateinit var mCallback: () -> Unit
+    private val job = SupervisorJob()
+
+    //加载完成回调
+    private var mCallback: AtomicReference<PrepareCallback?> = AtomicReference(null)
 
     /** 内存缓存Key */
     private var mMemoryCacheKey: String? = null
@@ -122,15 +131,24 @@ class SVGAVideoEntity {
         frames = movieParams.frames ?: 0
     }
 
+    private fun prepareLoadSuccessCallback() {
+        SvgaCoroutineManager.launchMain(childJob = job) {
+            mCallback.get()?.invoke()
+            mCallback.set(null)
+        }
+    }
+
     internal fun prepare(callback: () -> Unit, playCallback: SVGAParser.PlayCallback?) {
-        mCallback = callback
+        mCallback.set(callback)
         mPlayCallback = playCallback
         val item = movieItem
         if (item == null) {
-            mCallback()
+            prepareLoadSuccessCallback()
         } else {
-            setupAudios(item) {
-                mCallback()
+            SvgaCoroutineManager.launchIo(childJob = job) {
+                setupAudios(item) {
+                    prepareLoadSuccessCallback()
+                }
             }
         }
     }
@@ -209,7 +227,7 @@ class SVGAVideoEntity {
         } ?: listOf()
     }
 
-    private fun setupAudios(entity: MovieEntity, completionBlock: () -> Unit) {
+    private suspend fun setupAudios(entity: MovieEntity, completionBlock: () -> Unit) {
         if (entity.audios.isNullOrEmpty()) {
             completionBlock.invoke()
             return
@@ -225,6 +243,8 @@ class SVGAVideoEntity {
         this.audioList = entity.audios.map { audio ->
             return@map createSvgaAudioEntity(audio, audiosFileMap)
         }
+        delay(3000) //如果加载声音回调3秒没有反应，则兜底返回预加载成功，保证动画执行
+        completionBlock.invoke()
     }
 
     private fun createSvgaAudioEntity(
@@ -245,7 +265,7 @@ class SVGAVideoEntity {
                 fileList.add(entity.value)
             }
             it.onPlay(fileList)
-            mCallback()
+            prepareLoadSuccessCallback()
             mPlayCallback = null
             return item
         }
@@ -256,10 +276,15 @@ class SVGAVideoEntity {
                     val length = it.available().toDouble()
                     val offset = ((startTime / totalTime) * length).toLong()
                     item.soundID = soundPool?.load(it.fd, offset, length.toLong(), 1)
+                    LogUtils.debug(
+                        "SVGAParser",
+                        "audioKey = ${item.audioKey} soundID = ${item.soundID}"
+                    )
                 }
             }
         } catch (e: Exception) {
-            LogUtils.error(TAG, e)
+            LogUtils.error("SVGAParser", e)
+            prepareLoadSuccessCallback()
         }
         return item
     }
@@ -308,11 +333,12 @@ class SVGAVideoEntity {
         var soundLoaded = 0
         soundPool = generateSoundPool(entity)
         LogUtils.info("SVGAParser", "pool_start")
-        if (soundPool == null){
+        if (soundPool == null) {
             LogUtils.info("SVGAParser", "pool_null")
             completionBlock()
             return
         }
+        //这里不一定会回调，导致动画不会播放，需要优化
         soundPool?.setOnLoadCompleteListener { _, _, _ ->
             LogUtils.info("SVGAParser", "pool_complete")
             soundLoaded++
@@ -342,6 +368,7 @@ class SVGAVideoEntity {
 
     fun clear() {
         LogUtils.debug(TAG, "clear size = ${getMemorySize()}")
+        job.cancel()
         soundPool?.release()
         soundPool = null
         audioList = emptyList()
@@ -355,6 +382,7 @@ class SVGAVideoEntity {
             it.value.recycle()
         }
         imageMap.clear()
+        mCallback.set(null)
     }
 
     fun getMemoryCacheKey(): String? {
@@ -370,4 +398,6 @@ class SVGAVideoEntity {
         }.toLong()
     }
 }
+
+typealias PrepareCallback = () -> Unit
 

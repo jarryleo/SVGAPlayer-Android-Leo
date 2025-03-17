@@ -52,10 +52,11 @@ object SvgaCoroutineManager {
      */
     fun launchIo(
         handler: CoroutineExceptionHandler = coroutineExceptionHandler,
+        childJob: Job = SupervisorJob(this.job),
         block: suspend CoroutineScope.() -> Unit
     ): Job {
         return scope.launch(
-            (dispatcher ?: Dispatchers.IO) + handler + SupervisorJob(job)
+            (dispatcher ?: Dispatchers.IO) + handler + childJob
         ) { block.invoke(this) }
     }
 
@@ -64,8 +65,9 @@ object SvgaCoroutineManager {
      */
     fun launchMain(
         handler: CoroutineExceptionHandler = coroutineExceptionHandler,
+        childJob: Job = SupervisorJob(this.job),
         block: suspend CoroutineScope.() -> Unit
     ): Job {
-        return scope.launch(Dispatchers.Main + handler + SupervisorJob(job)) { block.invoke(this) }
+        return scope.launch(Dispatchers.Main + handler + childJob) { block.invoke(this) }
     }
 }
