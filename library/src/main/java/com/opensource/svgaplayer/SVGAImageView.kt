@@ -24,16 +24,14 @@ import java.net.URLDecoder
  * Created by PonyCui on 2017/3/29.
  * Modified by leo on 2024/7/1.
  */
-@SuppressLint("ObsoleteSdkInt")
+@SuppressLint("ObsoleteSdkInt", "UNUSED")
 open class SVGAImageView @JvmOverloads constructor(
     context: Context,
     attrs: AttributeSet? = null,
     defStyleAttr: Int = 0
 ) : ImageView(context, attrs, defStyleAttr) {
 
-    companion object {
-        private const val TAG = "SVGAImageView"
-    }
+    private val TAG = "SVGAImageView"
 
     enum class FillMode {
         Backward, //动画结束后显示最后一帧
@@ -53,15 +51,15 @@ open class SVGAImageView @JvmOverloads constructor(
     )
     var clearsAfterStop = false
     var clearsAfterDetached = true
-    var fillMode: FillMode = FillMode.Forward
+    var fillMode: FillMode = FillMode.Backward
     var callback: SVGACallback? = null
 
     private var mAnimator: ValueAnimator? = null
     private var mItemClickAreaListener: SVGAClickAreaListener? = null
     private var mAntiAlias = true
     private var mAutoPlay = true
-    private val mAnimatorListener by lazy { AnimatorListener(this) }
-    private val mAnimatorUpdateListener by lazy { AnimatorUpdateListener(this) }
+    private val mAnimatorListener = AnimatorListener()
+    private val mAnimatorUpdateListener = AnimatorUpdateListener()
     private var mStartFrame = 0
     private var mEndFrame = 0
     private var volume = 1f
@@ -348,11 +346,11 @@ open class SVGAImageView @JvmOverloads constructor(
             drawable.unloadSound() //播放完一次后释放音频资源
             when (fillMode) {
                 FillMode.Backward -> {
-                    drawable.currentFrame = mStartFrame
+                    drawable.currentFrame = mEndFrame
                 }
 
                 FillMode.Forward -> {
-                    drawable.currentFrame = mEndFrame
+                    drawable.currentFrame = mStartFrame
                 }
 
                 FillMode.Clear -> {
@@ -551,31 +549,31 @@ open class SVGAImageView @JvmOverloads constructor(
         return lastSource
     }
 
-    private class AnimatorListener(val view: SVGAImageView) : Animator.AnimatorListener {
+    private inner class AnimatorListener : Animator.AnimatorListener {
 
         override fun onAnimationRepeat(animation: Animator) {
-            view.callback?.onRepeat()
+            this@SVGAImageView.callback?.onRepeat()
         }
 
         override fun onAnimationEnd(animation: Animator) {
-            view.onAnimationEnd(animation)
+            this@SVGAImageView.onAnimationEnd(animation)
         }
 
         override fun onAnimationCancel(animation: Animator) {
-            view.onAnimationCancel(animation)
+            this@SVGAImageView.onAnimationCancel(animation)
         }
 
         override fun onAnimationStart(animation: Animator) {
-            view.onAnimationStart(animation)
+            this@SVGAImageView.onAnimationStart(animation)
         }
     } // end of AnimatorListener
 
 
-    private class AnimatorUpdateListener(val view: SVGAImageView) :
+    private inner class AnimatorUpdateListener :
         ValueAnimator.AnimatorUpdateListener {
 
         override fun onAnimationUpdate(animation: ValueAnimator) {
-            view.onAnimatorUpdate(animation)
+            this@SVGAImageView.onAnimatorUpdate(animation)
         }
     } // end of AnimatorUpdateListener
 }
