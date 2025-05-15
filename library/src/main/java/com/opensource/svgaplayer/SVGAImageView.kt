@@ -17,6 +17,7 @@ import com.opensource.svgaplayer.utils.SVGARange
 import com.opensource.svgaplayer.utils.SourceUtil
 import com.opensource.svgaplayer.utils.log.LogUtils
 import kotlinx.coroutines.Job
+import java.lang.ref.WeakReference
 import java.net.URL
 import java.net.URLDecoder
 
@@ -58,8 +59,12 @@ open class SVGAImageView @JvmOverloads constructor(
     private var mItemClickAreaListener: SVGAClickAreaListener? = null
     private var mAntiAlias = true
     private var mAutoPlay = true
-    private val mAnimatorListener = AnimatorListener()
-    private val mAnimatorUpdateListener = AnimatorUpdateListener()
+    private val mAnimatorListener by lazy {
+        AnimatorListener(WeakReference(this))
+    }
+    private val mAnimatorUpdateListener by lazy {
+        AnimatorUpdateListener(WeakReference(this))
+    }
     private var mStartFrame = 0
     private var mEndFrame = 0
     private var volume = 1f
@@ -216,8 +221,8 @@ open class SVGAImageView @JvmOverloads constructor(
             stopAnimation()
             videoItem.antiAlias = mAntiAlias
             val dynamicItem = SVGADynamicEntity(context)
-            dynamicBlock?.let { dynamicItem.it() }
             setVideoItem(videoItem, dynamicItem)
+            dynamicBlock?.let { dynamicItem.it() }
             getSVGADrawable()?.scaleType = scaleType
             if (mAutoPlay) {
                 play(null, false)
@@ -225,11 +230,11 @@ open class SVGAImageView @JvmOverloads constructor(
         }
     }
 
-    open fun startAnimation() {
+    fun startAnimation() {
         startAnimation(null, false)
     }
 
-    open fun startAnimation(range: SVGARange?, reverse: Boolean = false) {
+    fun startAnimation(range: SVGARange?, reverse: Boolean = false) {
         stopAnimation(false)
         play(range, reverse)
     }
@@ -248,7 +253,13 @@ open class SVGAImageView @JvmOverloads constructor(
         animator.duration =
             ((mEndFrame - mStartFrame + 1) * (1000 / videoItem.FPS) / generateScale()).toLong()
         animator.repeatCount = if (loops <= 0) ValueAnimator.INFINITE else loops - 1
+        if (mAnimatorUpdateListener.weakView.get() == null) {
+            mAnimatorUpdateListener.weakView = WeakReference(this)
+        }
         animator.addUpdateListener(mAnimatorUpdateListener)
+        if (mAnimatorListener.weakView.get() == null) {
+            mAnimatorListener.weakView = WeakReference(this)
+        }
         animator.addListener(mAnimatorListener)
         LogUtils.info(
             TAG, "================ start animation ================ " +
@@ -267,7 +278,7 @@ open class SVGAImageView @JvmOverloads constructor(
     /**
      * 获取svga动画所占用的真实内存
      */
-    open fun getSvgaMemorySize(): Long {
+    fun getSvgaMemorySize(): Long {
         val svgaMemorySize = getSVGADrawable()?.videoItem?.getMemorySize() ?: 0
         val dynamicMemorySize = getSVGADrawable()?.dynamicItem?.getMemorySize() ?: 0
         return svgaMemorySize + dynamicMemorySize
@@ -276,7 +287,7 @@ open class SVGAImageView @JvmOverloads constructor(
     /**
      * 获取svga动画所占用的内存格式化字符串
      */
-    open fun getSvgaMemorySizeFormat(): String {
+    fun getSvgaMemorySizeFormat(): String {
         //格式化动画占用内存字符串，显示详细的内存占用情况
         val svgaMemorySize = getSvgaMemorySize()
         return Formatter.formatFileSize(context, svgaMemorySize)
@@ -339,6 +350,9 @@ open class SVGAImageView @JvmOverloads constructor(
     }
 
     open fun onAnimationEnd(animation: Animator?) {
+        if (isAnimating) {
+            callback?.onFinished()
+        }
         isAnimating = false
         stopAnimation()
         val drawable = getSVGADrawable()
@@ -358,10 +372,9 @@ open class SVGAImageView @JvmOverloads constructor(
                 }
             }
         }
-        callback?.onFinished()
     }
 
-    open fun clear() {
+    fun clear() {
         getSVGADrawable()?.cleared = true
         getSVGADrawable()?.clear()
         //清理动态添加的数据
@@ -373,7 +386,7 @@ open class SVGAImageView @JvmOverloads constructor(
         LogUtils.debug(TAG, "clear last source: $lastSource")
     }
 
-    open fun clearLastSource() {
+    fun clearLastSource() {
         lastSource = null
     }
 
@@ -399,7 +412,7 @@ open class SVGAImageView @JvmOverloads constructor(
     /**
      * 设置动画音量
      */
-    open fun setVolume(volume: Float) {
+    fun setVolume(volume: Float) {
         val fixVolume = volume.coerceIn(0f, 1f)
         this.volume = fixVolume
         getSVGADrawable()?.setVolume(fixVolume)
@@ -417,11 +430,11 @@ open class SVGAImageView @JvmOverloads constructor(
         callback?.onResume()
     }
 
-    open fun stopAnimation() {
+    fun stopAnimation() {
         stopAnimation(clear = clearsAfterStop)
     }
 
-    open fun stopAnimation(clear: Boolean) {
+    fun stopAnimation(clear: Boolean) {
         mAnimator?.cancel()
         mAnimator?.removeAllListeners()
         mAnimator?.removeAllUpdateListeners()
@@ -433,11 +446,11 @@ open class SVGAImageView @JvmOverloads constructor(
         }
     }
 
-    open fun setVideoItem(videoItem: SVGAVideoEntity?) {
+    fun setVideoItem(videoItem: SVGAVideoEntity?) {
         setVideoItem(videoItem, SVGADynamicEntity(context))
     }
 
-    open fun setVideoItem(videoItem: SVGAVideoEntity?, dynamicItem: SVGADynamicEntity?) {
+    fun setVideoItem(videoItem: SVGAVideoEntity?, dynamicItem: SVGADynamicEntity?) {
         if (videoItem == null) {
             setImageDrawable(null)
         } else {
@@ -450,7 +463,7 @@ open class SVGAImageView @JvmOverloads constructor(
         }
     }
 
-    open fun stepToFrame(frame: Int, andPlay: Boolean) {
+    fun stepToFrame(frame: Int, andPlay: Boolean) {
         stopAnimation(false)
         val drawable = getSVGADrawable()
         if (drawable == null) {
@@ -472,7 +485,7 @@ open class SVGAImageView @JvmOverloads constructor(
         }
     }
 
-    open fun stepToPercentage(percentage: Double, andPlay: Boolean) {
+    fun stepToPercentage(percentage: Double, andPlay: Boolean) {
         val drawable = drawable as? SVGADrawable ?: return
         var frame = (drawable.videoItem.frames * percentage).toInt()
         if (frame >= drawable.videoItem.frames && frame > 0) {
@@ -481,7 +494,7 @@ open class SVGAImageView @JvmOverloads constructor(
         stepToFrame(frame, andPlay)
     }
 
-    open fun setOnAnimKeyClickListener(clickListener: SVGAClickAreaListener) {
+    fun setOnAnimKeyClickListener(clickListener: SVGAClickAreaListener) {
         mItemClickAreaListener = clickListener
     }
 
@@ -545,35 +558,59 @@ open class SVGAImageView @JvmOverloads constructor(
         return true
     }
 
-    open fun getLastSource(): String? {
+    fun getLastSource(): String? {
         return lastSource
     }
 
-    private inner class AnimatorListener : Animator.AnimatorListener {
-
+    private class AnimatorListener(var weakView: WeakReference<SVGAImageView>) :
+        Animator.AnimatorListener {
         override fun onAnimationRepeat(animation: Animator) {
-            this@SVGAImageView.callback?.onRepeat()
+            val svgaImageView = weakView.get()
+            if (svgaImageView == null) {
+                animation.removeListener(this)
+            } else {
+                svgaImageView.callback?.onRepeat()
+            }
         }
 
         override fun onAnimationEnd(animation: Animator) {
-            this@SVGAImageView.onAnimationEnd(animation)
+            val svgaImageView = weakView.get()
+            if (svgaImageView == null) {
+                animation.removeListener(this)
+            } else {
+                svgaImageView.onAnimationEnd(animation)
+            }
         }
 
         override fun onAnimationCancel(animation: Animator) {
-            this@SVGAImageView.onAnimationCancel(animation)
+            val svgaImageView = weakView.get()
+            if (svgaImageView == null) {
+                animation.removeListener(this)
+            } else {
+                svgaImageView.onAnimationCancel(animation)
+            }
         }
 
         override fun onAnimationStart(animation: Animator) {
-            this@SVGAImageView.onAnimationStart(animation)
+            val svgaImageView = weakView.get()
+            if (svgaImageView == null) {
+                animation.removeListener(this)
+            } else {
+                svgaImageView.onAnimationStart(animation)
+            }
         }
     } // end of AnimatorListener
 
 
-    private inner class AnimatorUpdateListener :
+    private class AnimatorUpdateListener(var weakView: WeakReference<SVGAImageView>) :
         ValueAnimator.AnimatorUpdateListener {
-
         override fun onAnimationUpdate(animation: ValueAnimator) {
-            this@SVGAImageView.onAnimatorUpdate(animation)
+            val svgaImageView = weakView.get()
+            if (svgaImageView == null) {
+                animation.removeUpdateListener(this)
+            } else {
+                svgaImageView.onAnimatorUpdate(animation)
+            }
         }
     } // end of AnimatorUpdateListener
 }

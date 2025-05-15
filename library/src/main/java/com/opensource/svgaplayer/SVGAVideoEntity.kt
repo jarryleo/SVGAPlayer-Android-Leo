@@ -278,7 +278,7 @@ class SVGAVideoEntity {
                     item.soundID = soundPool?.load(it.fd, offset, length.toLong(), 1)
                     LogUtils.debug(
                         "SVGAParser",
-                        "audioKey = ${item.audioKey} soundID = ${item.soundID}"
+                        "audioKey = ${item.audioKey} soundID = ${item.soundID}, startTime = $startTime, endTime = $totalTime"
                     )
                 }
             }
