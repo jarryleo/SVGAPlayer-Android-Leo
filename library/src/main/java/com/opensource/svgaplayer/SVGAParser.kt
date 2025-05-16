@@ -148,10 +148,13 @@ class SVGAParser private constructor(context: Context) {
             LogUtils.error(TAG, "在配置 SVGAParser context 前, 无法解析 SVGA 文件。")
             return null
         }
-        LogUtils.info(TAG, "================ decode $name from assets ================")
         //加载内存缓存数据
         val memoryCacheKey: String? =
             if (config.isCacheToMemory) SVGAMemoryCache.createKey(name, config) else null
+        LogUtils.info(
+            TAG,
+            "================ decode $name from assets memoryCacheKey = $memoryCacheKey ================"
+        )
         if (decodeFromMemoryCacheKey(memoryCacheKey, config, callback, playCallback, name)) {
             return null
         }
@@ -568,20 +571,26 @@ class SVGAParser private constructor(context: Context) {
         return if (config.isCacheToMemory && !memoryCacheKey.isNullOrEmpty()) { //加载内存缓存
             //获取内存缓存
             val entity = SVGAMemoryCache.INSTANCE.getData(memoryCacheKey)
-            //如果内存缓存为空，则加入等待队列
-            if (entity == null) {
-                val inQueue = SVGAMemoryLoadingQueue.inQueue(memoryCacheKey)
-                //加入等待队列
-                SVGAMemoryLoadingQueue.addItem(
-                    memoryCacheKey,
-                    SVGAMemoryLoadingQueue.SVGAMemoryLoadingItem(callback)
-                )
-                return inQueue
+            //查询等待队列
+            val inQueue = SVGAMemoryLoadingQueue.inQueue(memoryCacheKey)
+            //加入等待队列
+            SVGAMemoryLoadingQueue.addItem(
+                memoryCacheKey,
+                SVGAMemoryLoadingQueue.SVGAMemoryLoadingItem(callback)
+            )
+            LogUtils.info(
+                TAG,
+                "decodeFromMemoryCacheKey addItem $memoryCacheKey, inQueue = $inQueue"
+            )
+            if (!inQueue && entity == null) { //无缓存，无队列，原路径加载
+                return false
             }
-            entity.prepare({
-                LogUtils.info(TAG, "decodeFromMemoryCacheKey prepare success")
-                this.invokeCompleteCallback(entity, callback, alias = alias)
-            }, playCallback)
+            if (!inQueue && entity != null) { //第一个进入队列的，且有缓存的情况。回调并可清空队列
+                entity.prepare({
+                    LogUtils.info(TAG, "decodeFromMemoryCacheKey prepare success")
+                    this.invokeCompleteCallback(entity, callback, alias = alias)
+                }, playCallback)
+            }
             true
         } else {
             false

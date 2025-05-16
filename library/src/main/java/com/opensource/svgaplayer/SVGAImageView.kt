@@ -383,10 +383,11 @@ open class SVGAImageView @JvmOverloads constructor(
         setImageDrawable(null)
         if (loadJob?.isActive == true) loadJob?.cancel()
         loadJob = null
-        LogUtils.debug(TAG, "clear last source: $lastSource")
+        LogUtils.debug(TAG, "clear : $lastSource")
     }
 
     fun clearLastSource() {
+        LogUtils.debug(TAG, "clear last source: $lastSource")
         lastSource = null
     }
 
