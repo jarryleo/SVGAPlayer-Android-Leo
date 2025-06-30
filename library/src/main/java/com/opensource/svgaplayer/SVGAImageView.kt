@@ -182,7 +182,7 @@ open class SVGAImageView @JvmOverloads constructor(
             }
             loadingSource = realUrl
             clear()
-            LogUtils.debug(TAG, "load from url: $realUrl , last source: $lastSource")
+            LogUtils.debug(TAG) { "load from url: $realUrl , last source: $lastSource" }
             loadJob = parser?.decodeFromURL(
                 url,
                 config = cfg ?: SVGAConfig(frameWidth = width, frameHeight = height),
@@ -194,7 +194,7 @@ open class SVGAImageView @JvmOverloads constructor(
             }
             loadingSource = realUrl
             clear()
-            LogUtils.debug(TAG, "load from file: $realUrl , last source: $lastSource")
+            LogUtils.debug(TAG) { "load from file: $realUrl , last source: $lastSource" }
             loadJob = parser?.decodeFromFile(
                 realUrl,
                 config = cfg ?: SVGAConfig(frameWidth = width, frameHeight = height),
@@ -206,7 +206,7 @@ open class SVGAImageView @JvmOverloads constructor(
             }
             loadingSource = realUrl
             clear()
-            LogUtils.debug(TAG, "load from assert: $realUrl , last source: $lastSource")
+            LogUtils.debug(TAG) { "load from assert: $realUrl , last source: $lastSource" }
             loadJob = parser?.decodeFromAssets(
                 realUrl,
                 config = cfg ?: SVGAConfig(frameWidth = width, frameHeight = height),
@@ -261,12 +261,12 @@ open class SVGAImageView @JvmOverloads constructor(
             mAnimatorListener.weakView = WeakReference(this)
         }
         animator.addListener(mAnimatorListener)
-        LogUtils.info(
-            TAG, "================ start animation ================ " +
+        LogUtils.info(TAG) {
+            "================ start animation ================ " +
                     "\r\n source: $lastSource" +
                     "\r\n url: $loadingSource" +
                     "\r\n svgaMemorySize: ${getSvgaMemorySizeFormat()}(${getSvgaMemorySize()} Bytes)"
-        )
+        }
         if (reverse) {
             animator.reverse()
         } else {
@@ -317,11 +317,9 @@ open class SVGAImageView @JvmOverloads constructor(
                 setMethod.isAccessible = true
                 setMethod.invoke(animatorClass, 1.0f)
                 scale = 1.0
-                LogUtils.info(
-                    TAG,
-                    "The animation duration scale has been reset to" +
-                            " 1.0x, because you closed it on developer options."
-                )
+                LogUtils.info(TAG) {
+                    "The animation duration scale has been reset to 1.0x, because you closed it on developer options."
+                }
             }
         } catch (ignore: Exception) {
             ignore.printStackTrace()
@@ -383,11 +381,11 @@ open class SVGAImageView @JvmOverloads constructor(
         setImageDrawable(null)
         if (loadJob?.isActive == true) loadJob?.cancel()
         loadJob = null
-        LogUtils.debug(TAG, "clear : $lastSource")
+        LogUtils.debug(TAG) { "clear : $lastSource" }
     }
 
     fun clearLastSource() {
-        LogUtils.debug(TAG, "clear last source: $lastSource")
+        LogUtils.debug(TAG) { "clear last source: $lastSource" }
         lastSource = null
     }
 

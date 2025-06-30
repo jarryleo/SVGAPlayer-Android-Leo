@@ -197,7 +197,7 @@ class SVGAVideoEntity {
             }
             val filePath = generateBitmapFilePath(entry.value.utf8(), entry.key)
             createBitmap(byteArray, filePath)?.let { bitmap ->
-                LogUtils.info(TAG, "createBitmap key = ${entry.key}")
+                LogUtils.info(TAG) { "createBitmap key = ${entry.key}" }
                 imageMap[entry.key] = bitmap
             }
         }
@@ -276,14 +276,11 @@ class SVGAVideoEntity {
                     val length = it.available().toDouble()
                     val offset = ((startTime / totalTime) * length).toLong()
                     item.soundID = soundPool?.load(it.fd, offset, length.toLong(), 1)
-                    LogUtils.debug(
-                        "SVGAParser",
-                        "audioKey = ${item.audioKey} soundID = ${item.soundID}, startTime = $startTime, endTime = $totalTime"
-                    )
+                    LogUtils.debug("SVGAParser") { "audioKey = ${item.audioKey} soundID = ${item.soundID}, startTime = $startTime, endTime = $totalTime" }
                 }
             }
         } catch (e: Exception) {
-            LogUtils.error("SVGAParser", e)
+            LogUtils.errorEx(tag = "SVGAParser") { e }
             prepareLoadSuccessCallback()
         }
         return item
@@ -332,15 +329,15 @@ class SVGAVideoEntity {
     private fun setupSoundPool(entity: MovieEntity, completionBlock: () -> Unit) {
         var soundLoaded = 0
         soundPool = generateSoundPool(entity)
-        LogUtils.info("SVGAParser", "pool_start")
+        LogUtils.info("SVGAParser") { "pool_start" }
         if (soundPool == null) {
-            LogUtils.info("SVGAParser", "pool_null")
+            LogUtils.info("SVGAParser") { "pool_null" }
             completionBlock()
             return
         }
         //这里不一定会回调，导致动画不会播放，需要优化
         soundPool?.setOnLoadCompleteListener { _, _, _ ->
-            LogUtils.info("SVGAParser", "pool_complete")
+            LogUtils.info("SVGAParser") { "pool_complete" }
             soundLoaded++
             if (soundLoaded >= entity.audios.count()) {
                 completionBlock()
@@ -361,13 +358,13 @@ class SVGAVideoEntity {
                 SoundPool(12.coerceAtMost(entity.audios.count()), AudioManager.STREAM_MUSIC, 0)
             }
         } catch (e: Exception) {
-            LogUtils.error(TAG, e)
+            LogUtils.errorEx(TAG) { e }
             null
         }
     }
 
     fun clear() {
-        LogUtils.debug(TAG, "clear size = ${getMemorySize()}")
+        LogUtils.debug(TAG) { "clear size = ${getMemorySize()}" }
         job.cancel()
         soundPool?.release()
         soundPool = null

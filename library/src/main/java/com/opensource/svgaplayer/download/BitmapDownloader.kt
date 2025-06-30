@@ -37,10 +37,7 @@ object BitmapDownloader {
         if (downLoadQueue.contains(url)) {
             return null
         }
-        LogUtils.debug(
-            "BitmapDownloader",
-            "downloadBitmap url = $url, reqWidth = $reqWidth, reqHeight = $reqHeight"
-        )
+        LogUtils.debug("BitmapDownloader") { "downloadBitmap url = $url, reqWidth = $reqWidth, reqHeight = $reqHeight" }
         downLoadQueue.add(url)
         val bitmap = withTimeoutOrNull(30_000) {
             suspendCoroutine {
@@ -69,7 +66,7 @@ object BitmapDownloader {
             }
         }
         downLoadQueue.remove(url)
-        LogUtils.debug("BitmapDownloader", "downloadBitmap bitmap = $bitmap")
+        LogUtils.debug("BitmapDownloader") { "downloadBitmap bitmap = $bitmap" }
         if (bitmap != null) {
             SVGABitmapCache.INSTANCE.putData(key, bitmap)
         }

@@ -40,12 +40,12 @@ object SVGAFileCache {
      */
     internal fun clearCache() {
         if (!isInitialized()) {
-            LogUtils.error(TAG, "SVGACache is not init!")
+            LogUtils.error(TAG) { "SVGACache is not init!" }
             return
         }
         SvgaCoroutineManager.launchIo {
             clearDir(cacheDir)
-            LogUtils.info(TAG, "Clear svga cache done!")
+            LogUtils.info(TAG) { "Clear svga cache done!" }
         }
     }
 
@@ -65,7 +65,7 @@ object SVGAFileCache {
                 }
             }
         } catch (e: Exception) {
-            LogUtils.error(TAG, "Clear svga cache path: $path fail", e)
+            LogUtils.error(TAG, { "Clear svga cache path: $path fail" }, { e })
         }
     }
 

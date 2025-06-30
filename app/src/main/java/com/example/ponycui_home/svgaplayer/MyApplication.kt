@@ -7,7 +7,7 @@ class MyApplication : Application() {
 
     override fun onCreate() {
         super.onCreate()
-        SVGAManager.init(this)
+        SVGAManager.init(this, logEnabled = false)
     }
 
     override fun onLowMemory() {
