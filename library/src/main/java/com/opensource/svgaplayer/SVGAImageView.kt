@@ -551,7 +551,11 @@ open class SVGAImageView @JvmOverloads constructor(
         //被清理的drawable不需要重新加载
         if (drawable.cleared) return false
         //存在dynamicItem，因为可能前后两次存在差异，需要重新加载数据
-        if (drawable.dynamicItem != null && dynamicBlock != null) return false
+        if (drawable.dynamicItem != null && dynamicBlock != null) {
+            val dynamicItem = SVGADynamicEntity(context)
+            dynamicBlock?.let { dynamicItem.it() }
+            drawable.updateDynamicItem(dynamicItem)
+        }
         //动画是否正在执行
         if (!isAnimating) {
             startAnimation()
