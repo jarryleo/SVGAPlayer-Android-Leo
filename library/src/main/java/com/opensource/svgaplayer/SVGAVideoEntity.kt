@@ -197,7 +197,7 @@ class SVGAVideoEntity {
             }
             val filePath = generateBitmapFilePath(entry.value.utf8(), entry.key)
             createBitmap(byteArray, filePath)?.let { bitmap ->
-                LogUtils.info(TAG, "createBitmap key = ${entry.key}")
+                LogUtils.debug(TAG, "createBitmap key = ${entry.key}")
                 imageMap[entry.key] = bitmap
             }
         }

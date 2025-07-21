@@ -52,6 +52,7 @@ open class SVGAImageView @JvmOverloads constructor(
     )
     var clearsAfterStop = false
     var clearsAfterDetached = true
+    var clearsLastSourceOnDetached = false
     var fillMode: FillMode = FillMode.Backward
     var callback: SVGACallback? = null
 
@@ -532,6 +533,9 @@ open class SVGAImageView @JvmOverloads constructor(
         stopAnimation(clearsAfterDetached)
         if (clearsAfterDetached) {
             clear()
+        }
+        if (clearsLastSourceOnDetached){
+            clearLastSource()
         }
     }
 

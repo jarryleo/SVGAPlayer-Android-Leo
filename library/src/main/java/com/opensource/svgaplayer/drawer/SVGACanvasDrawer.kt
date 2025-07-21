@@ -34,7 +34,8 @@ import kotlin.math.sqrt
  */
 
 internal class SVGACanvasDrawer(
-    videoItem: SVGAVideoEntity, private val dynamicItem: SVGADynamicEntity?
+    videoItem: SVGAVideoEntity,
+    var dynamicItem: SVGADynamicEntity?
 ) : SGVADrawer(videoItem) {
 
     private val sharedValues = ShareValues()
@@ -396,14 +397,15 @@ internal class SVGACanvasDrawer(
         frameMatrix: Matrix,
         rect: Rect,  //绘制区域
     ) {
-        if (dynamicItem?.isTextDirty == true) {
+        val svgaDynamicEntity = dynamicItem
+        if (svgaDynamicEntity?.isTextDirty == true) {
             this.drawTextCache.clear()
-            dynamicItem.isTextDirty = false
+            svgaDynamicEntity.isTextDirty = false
         }
         val imageKey = sprite.imageKey ?: return
         var textBitmap: Bitmap? = null
-        dynamicItem?.dynamicText?.get(imageKey)?.let { drawingText ->
-            dynamicItem.dynamicTextPaint[imageKey]?.let { drawingTextPaint ->
+        svgaDynamicEntity?.dynamicText?.get(imageKey)?.let { drawingText ->
+            svgaDynamicEntity.dynamicTextPaint[imageKey]?.let { drawingTextPaint ->
                 drawTextCache[imageKey]?.let {
                     textBitmap = it
                 } ?: kotlin.run {
@@ -427,7 +429,7 @@ internal class SVGACanvasDrawer(
             }
         }
 
-        dynamicItem?.dynamicBoringLayoutText?.get(imageKey)?.let { dl ->
+        svgaDynamicEntity?.dynamicBoringLayoutText?.get(imageKey)?.let { dl ->
             drawTextCache[imageKey]?.let {
                 textBitmap = it
             } ?: kotlin.run {
@@ -443,7 +445,7 @@ internal class SVGACanvasDrawer(
             }
         }
 
-        dynamicItem?.dynamicStaticLayoutText?.get(imageKey)?.let {
+        svgaDynamicEntity?.dynamicStaticLayoutText?.get(imageKey)?.let {
             drawTextCache[imageKey]?.let {
                 textBitmap = it
             } ?: kotlin.run {
@@ -494,7 +496,7 @@ internal class SVGACanvasDrawer(
 
                 drawTextRtlCache[imageKey] = layout.text.indices.any { layout.isRtlCharAt(it) }
                 if (isMarquee) {
-                    val textScale = dynamicItem.dynamicTextScale[imageKey] ?: 1f
+                    val textScale = svgaDynamicEntity.dynamicTextScale[imageKey] ?: 1f
                     val scaleY =
                         (drawingBitmap.height.toFloat() / layout.height.maxOf(1)) * textScale //内边距
                     val bitmapWidth = (targetWidth * scaleY).roundToIntSafe()
@@ -513,7 +515,7 @@ internal class SVGACanvasDrawer(
                     )
                     textBitmap = bitmap
                     val textCanvas = Canvas(bitmap)
-                    val textScale = dynamicItem.dynamicTextScale[imageKey] ?: 1f
+                    val textScale = svgaDynamicEntity.dynamicTextScale[imageKey] ?: 1f
                     val scale =
                         drawingBitmap.height * 1f / layout.height.maxOf(1) * textScale //内边距
                     if (layout.lineCount == 1
