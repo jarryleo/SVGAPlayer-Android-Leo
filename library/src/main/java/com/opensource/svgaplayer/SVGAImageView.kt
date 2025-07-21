@@ -91,6 +91,8 @@ open class SVGAImageView @JvmOverloads constructor(
         clearsAfterStop = typedArray.getBoolean(R.styleable.SVGAImageView_clearsAfterStop, false)
         clearsAfterDetached =
             typedArray.getBoolean(R.styleable.SVGAImageView_clearsAfterDetached, true)
+        clearsLastSourceOnDetached =
+            typedArray.getBoolean(R.styleable.SVGAImageView_clearsLastSourceOnDetached, false)
         mAntiAlias = typedArray.getBoolean(R.styleable.SVGAImageView_antiAlias, true)
         mAutoPlay = typedArray.getBoolean(R.styleable.SVGAImageView_autoPlay, true)
         typedArray.getString(R.styleable.SVGAImageView_fillMode)?.let {
