@@ -9,5 +9,5 @@ import android.graphics.Bitmap
  */
 interface BitmapTransformation {
 
-    fun transform(bitmap: Bitmap?): Bitmap?
+    fun transform(bitmap: Bitmap?, width: Int?, height: Int?): Bitmap?
 }

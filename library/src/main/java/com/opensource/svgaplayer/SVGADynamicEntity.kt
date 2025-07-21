@@ -176,7 +176,8 @@ class SVGADynamicEntity(val context: Context) {
                 if (bitmap != null && isActive) {
                     val bitmapTransformation = dynamicBitmapTransformation[forKey]
                     if (bitmapTransformation != null) {
-                        val transformationBitmap = bitmapTransformation.transform(bitmap)
+                        val transformationBitmap =
+                            bitmapTransformation.transform(bitmap, width, height)
                         dynamicImage[forKey] = transformationBitmap ?: bitmap
                     } else {
                         dynamicImage[forKey] = bitmap
