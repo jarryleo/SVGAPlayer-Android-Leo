@@ -11,8 +11,7 @@ import com.opensource.svgaplayer.drawer.SVGACanvasDrawer
 class SVGADrawable(
     val videoItem: SVGAVideoEntity,
     val dynamicItem: SVGADynamicEntity?
-) :
-    Drawable() {
+) : Drawable() {
 
     var cleared = true
         internal set(value) {
@@ -43,6 +42,11 @@ class SVGADrawable(
         canvas.let {
             drawer.drawFrame(it, currentFrame, scaleType)
         }
+    }
+
+    fun updateDynamicItem(dynamicItem: SVGADynamicEntity){
+        drawer.dynamicItem?.clearDynamicObjects()
+        drawer.dynamicItem = dynamicItem
     }
 
     override fun setAlpha(alpha: Int) {

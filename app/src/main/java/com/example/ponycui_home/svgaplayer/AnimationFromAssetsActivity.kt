@@ -6,6 +6,7 @@ import android.os.Build
 import android.os.Bundle
 import com.opensource.svgaplayer.SVGAImageView
 import com.opensource.svgaplayer.entities.SVGATextEntity
+import com.opensource.svgaplayer.utils.CircleCropTransFormation
 import com.opensource.svgaplayer.utils.log.SVGALogger.setLogEnabled
 
 class AnimationFromAssetsActivity : Activity() {
@@ -34,8 +35,9 @@ class AnimationFromAssetsActivity : Activity() {
                 SVGATextEntity(nick)
             )
             setDynamicImage(
-                "https://github.com/PonyCui/resources/blob/master/svga_replace_avatar.png?raw=true",
-                "sender_avatar"
+                "https://res.fancyliveapp.com/Fl2agTbJDqDCmz3k5533T9WooOBm?imageslim",
+                "sender_avatar",
+                CircleCropTransFormation()
             )
         }
     }

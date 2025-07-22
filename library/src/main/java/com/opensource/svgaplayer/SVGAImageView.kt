@@ -52,6 +52,7 @@ open class SVGAImageView @JvmOverloads constructor(
     )
     var clearsAfterStop = false
     var clearsAfterDetached = true
+    var clearsLastSourceOnDetached = false
     var fillMode: FillMode = FillMode.Backward
     var callback: SVGACallback? = null
 
@@ -90,6 +91,8 @@ open class SVGAImageView @JvmOverloads constructor(
         clearsAfterStop = typedArray.getBoolean(R.styleable.SVGAImageView_clearsAfterStop, false)
         clearsAfterDetached =
             typedArray.getBoolean(R.styleable.SVGAImageView_clearsAfterDetached, true)
+        clearsLastSourceOnDetached =
+            typedArray.getBoolean(R.styleable.SVGAImageView_clearsLastSourceOnDetached, false)
         mAntiAlias = typedArray.getBoolean(R.styleable.SVGAImageView_antiAlias, true)
         mAutoPlay = typedArray.getBoolean(R.styleable.SVGAImageView_autoPlay, true)
         typedArray.getString(R.styleable.SVGAImageView_fillMode)?.let {
@@ -531,6 +534,9 @@ open class SVGAImageView @JvmOverloads constructor(
         if (clearsAfterDetached) {
             clear()
         }
+        if (clearsLastSourceOnDetached){
+            clearLastSource()
+        }
     }
 
     override fun onLayout(changed: Boolean, left: Int, top: Int, right: Int, bottom: Int) {
@@ -549,7 +555,11 @@ open class SVGAImageView @JvmOverloads constructor(
         //被清理的drawable不需要重新加载
         if (drawable.cleared) return false
         //存在dynamicItem，因为可能前后两次存在差异，需要重新加载数据
-        if (drawable.dynamicItem != null && dynamicBlock != null) return false
+        if (drawable.dynamicItem != null && dynamicBlock != null) {
+            val dynamicItem = SVGADynamicEntity(context)
+            dynamicBlock?.let { dynamicItem.it() }
+            drawable.updateDynamicItem(dynamicItem)
+        }
         //动画是否正在执行
         if (!isAnimating) {
             startAnimation()

@@ -19,9 +19,6 @@ class SVGABitmapCache(private val cacheLimit: Int = limitCount) {
                 newValue: WeakReference<Bitmap>?
             ) {
                 if (evicted) {
-                    oldValue?.get()?.apply {
-                        if (!isRecycled) recycle()
-                    }
                     oldValue?.clear()
                 }
             }
@@ -61,7 +58,7 @@ class SVGABitmapCache(private val cacheLimit: Int = limitCount) {
         val INSTANCE by lazy { SVGABitmapCache(limitCount) }
 
         /** 内存缓存个数 */
-        var limitCount = 5
+        var limitCount = 20
             set(value) {
                 field = value
                 INSTANCE.resizeCache(value)

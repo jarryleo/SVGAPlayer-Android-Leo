@@ -23,16 +23,18 @@ class CircleCropTransFormation : BitmapTransformation {
             }
     }
 
-    override fun transform(bitmap: Bitmap?): Bitmap? {
+    override fun transform(bitmap: Bitmap?, width: Int?, height: Int?): Bitmap? {
         if (bitmap == null) return null
         val w = bitmap.width
         val h = bitmap.height
         val d = minOf(w, h)
-        val r = d / 2f
-        val output = Bitmap.createBitmap(d, d, Bitmap.Config.ARGB_8888)
+        val r = minOf(width ?: w, height ?: h) / 2f
+        val output = Bitmap.createBitmap(width ?: d, height ?: d, Bitmap.Config.ARGB_8888)
         val canvas = Canvas(output)
-        val srcRect = Rect((w - d) / 2, (h - d) / 2, d, d)
-        val destRect = Rect(0, 0, d, d)
+        val left = (w - d) / 2
+        val top = (h - d) / 2
+        val srcRect = Rect(left, top, left + d, top + d)
+        val destRect = Rect(0, 0, width ?: d, height ?: d)
         canvas.drawARGB(0, 0, 0, 0)
         canvas.drawCircle(r, r, r, CIRCLE_CROP_SHAPE_PAINT)
         canvas.drawBitmap(bitmap, srcRect, destRect, CIRCLE_CROP_BITMAP_PAINT)
