@@ -52,7 +52,7 @@ open class SVGAImageView @JvmOverloads constructor(
     )
     var clearsAfterStop = false
     var clearsAfterDetached = true
-    var clearsLastSourceOnDetached = false
+    var clearsLastSourceAfterDetached = false
     var fillMode: FillMode = FillMode.Backward
     var callback: SVGACallback? = null
 
@@ -91,8 +91,8 @@ open class SVGAImageView @JvmOverloads constructor(
         clearsAfterStop = typedArray.getBoolean(R.styleable.SVGAImageView_clearsAfterStop, false)
         clearsAfterDetached =
             typedArray.getBoolean(R.styleable.SVGAImageView_clearsAfterDetached, true)
-        clearsLastSourceOnDetached =
-            typedArray.getBoolean(R.styleable.SVGAImageView_clearsLastSourceOnDetached, false)
+        clearsLastSourceAfterDetached =
+            typedArray.getBoolean(R.styleable.SVGAImageView_clearsLastSourceAfterDetached, false)
         mAntiAlias = typedArray.getBoolean(R.styleable.SVGAImageView_antiAlias, true)
         mAutoPlay = typedArray.getBoolean(R.styleable.SVGAImageView_autoPlay, true)
         typedArray.getString(R.styleable.SVGAImageView_fillMode)?.let {
@@ -534,7 +534,7 @@ open class SVGAImageView @JvmOverloads constructor(
         if (clearsAfterDetached) {
             clear()
         }
-        if (clearsLastSourceOnDetached){
+        if (clearsLastSourceAfterDetached){
             clearLastSource()
         }
     }
