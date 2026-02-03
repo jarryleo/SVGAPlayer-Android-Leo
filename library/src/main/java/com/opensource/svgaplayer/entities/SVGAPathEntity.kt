@@ -2,7 +2,7 @@ package com.opensource.svgaplayer.entities
 
 import android.graphics.Path
 import com.opensource.svgaplayer.utils.SVGAPoint
-import java.util.*
+import java.util.StringTokenizer
 
 private val VALID_METHODS: Set<String> = setOf("M", "L", "H", "V", "C", "S", "Q", "R", "A", "Z", "m", "l", "h", "v", "c", "s", "q", "r", "a", "z")
 

@@ -132,17 +132,22 @@ class SVGAVideoEntity {
     }
 
     private fun prepareLoadSuccessCallback() {
-        SvgaCoroutineManager.launchMain(childJob = job) {
-            mCallback.get()?.invoke()
-            mCallback.set(null)
-        }
+        mCallback.get()?.invoke()
+        mCallback.set(null)
     }
 
     internal fun prepare(callback: () -> Unit, playCallback: SVGAParser.PlayCallback?) {
+        val lastCallback = mCallback.get()
+        if (lastCallback != null) {
+            //上一个回调未执行完毕，当前回调直接执行
+            callback.invoke()
+            return
+        }
         mCallback.set(callback)
         mPlayCallback = playCallback
         val item = movieItem
         if (item == null) {
+            LogUtils.debug(TAG, "movieItem = null")
             prepareLoadSuccessCallback()
         } else {
             SvgaCoroutineManager.launchIo(childJob = job) {
@@ -197,7 +202,7 @@ class SVGAVideoEntity {
             }
             val filePath = generateBitmapFilePath(entry.value.utf8(), entry.key)
             createBitmap(byteArray, filePath)?.let { bitmap ->
-                LogUtils.info(TAG) { "createBitmap key = ${entry.key}" }
+                LogUtils.debug(TAG, "createBitmap key = ${entry.key}")
                 imageMap[entry.key] = bitmap
             }
         }
@@ -255,6 +260,7 @@ class SVGAVideoEntity {
         val startTime = (audio.startTime ?: 0).toDouble()
         val totalTime = (audio.totalTime ?: 0).toDouble()
         if (totalTime.toInt() == 0) {
+            mPlayCallback = null
             // 除数不能为 0
             return item
         }
@@ -276,11 +282,14 @@ class SVGAVideoEntity {
                     val length = it.available().toDouble()
                     val offset = ((startTime / totalTime) * length).toLong()
                     item.soundID = soundPool?.load(it.fd, offset, length.toLong(), 1)
-                    LogUtils.debug("SVGAParser") { "audioKey = ${item.audioKey} soundID = ${item.soundID}, startTime = $startTime, endTime = $totalTime" }
+                    LogUtils.debug(
+                        "SVGAParser",
+                        "audioKey = ${item.audioKey} soundID = ${item.soundID}"
+                    )
                 }
             }
         } catch (e: Exception) {
-            LogUtils.errorEx(tag = "SVGAParser") { e }
+            LogUtils.error("SVGAParser", e)
             prepareLoadSuccessCallback()
         }
         return item
@@ -288,7 +297,9 @@ class SVGAVideoEntity {
 
     private fun generateAudioFile(audioCache: File, value: ByteArray): File {
         audioCache.createNewFile()
-        FileOutputStream(audioCache).write(value)
+        FileOutputStream(audioCache).use {
+            it.write(value)
+        }
         return audioCache
     }
 
@@ -329,15 +340,15 @@ class SVGAVideoEntity {
     private fun setupSoundPool(entity: MovieEntity, completionBlock: () -> Unit) {
         var soundLoaded = 0
         soundPool = generateSoundPool(entity)
-        LogUtils.info("SVGAParser") { "pool_start" }
+        LogUtils.info("SVGAParser", "pool_start")
         if (soundPool == null) {
-            LogUtils.info("SVGAParser") { "pool_null" }
+            LogUtils.info("SVGAParser", "pool_null")
             completionBlock()
             return
         }
         //这里不一定会回调，导致动画不会播放，需要优化
         soundPool?.setOnLoadCompleteListener { _, _, _ ->
-            LogUtils.info("SVGAParser") { "pool_complete" }
+            LogUtils.info("SVGAParser", "pool_complete")
             soundLoaded++
             if (soundLoaded >= entity.audios.count()) {
                 completionBlock()
@@ -358,13 +369,13 @@ class SVGAVideoEntity {
                 SoundPool(12.coerceAtMost(entity.audios.count()), AudioManager.STREAM_MUSIC, 0)
             }
         } catch (e: Exception) {
-            LogUtils.errorEx(TAG) { e }
+            LogUtils.error(TAG, e)
             null
         }
     }
 
     fun clear() {
-        LogUtils.debug(TAG) { "clear size = ${getMemorySize()}" }
+        LogUtils.debug(TAG, "clear size = ${getMemorySize()}")
         job.cancel()
         soundPool?.release()
         soundPool = null

@@ -227,6 +227,11 @@ internal class SVGACanvasDrawer(
             if (audio.startFrame == frameIndex) {
                 this.videoItem.soundPool?.let { soundPool ->
                     audio.soundID?.let { soundID ->
+                        val playId = audio.playID
+                        if (playId != null && playId != 0) {
+                            soundPool.stop(playId)
+                            audio.playID = 0
+                        }
                         audio.playID = soundPool.play(soundID, leftVolume, rightVolume, 1, 0, 1.0f)
                     }
                 }

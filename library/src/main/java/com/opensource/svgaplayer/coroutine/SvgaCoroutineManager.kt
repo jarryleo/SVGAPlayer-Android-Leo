@@ -23,7 +23,10 @@ object SvgaCoroutineManager {
      */
     private val coroutineExceptionHandler =
         CoroutineExceptionHandler { coroutineContext, throwable ->
-            LogUtils.debug("SvgaCoroutineManager") { "coroutineContext $coroutineContext, error msg : ${throwable.message}" }
+            LogUtils.debug(
+                "SvgaCoroutineManager",
+                "coroutineContext $coroutineContext, error msg : ${throwable.message}"
+            )
             throwable.printStackTrace()
         }
 

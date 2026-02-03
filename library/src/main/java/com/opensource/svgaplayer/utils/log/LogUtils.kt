@@ -6,53 +6,52 @@ package com.opensource.svgaplayer.utils.log
 internal object LogUtils {
     private const val TAG = "SVGALog"
 
-    fun verbose(tag: String = TAG, callback: () -> String) {
+    fun verbose(tag: String = TAG, msg: String) {
         if (!SVGALogger.isLogEnabled()) {
             return
         }
-        SVGALogger.getSVGALogger()?.verbose(tag, callback.invoke())
+        SVGALogger.getSVGALogger()?.verbose(tag, msg)
     }
 
-    fun info(tag: String = TAG, callback: () -> String) {
+    fun info(tag: String = TAG, msg: String) {
         if (!SVGALogger.isLogEnabled()) {
             return
         }
-        SVGALogger.getSVGALogger()?.info(tag, callback.invoke())
+        SVGALogger.getSVGALogger()?.info(tag, msg)
     }
 
-    fun debug(tag: String = TAG, callback: () -> String) {
+    fun debug(tag: String = TAG, msg: String) {
         if (!SVGALogger.isLogEnabled()) {
             return
         }
-        SVGALogger.getSVGALogger()?.debug(tag, callback.invoke())
+        SVGALogger.getSVGALogger()?.debug(tag, msg)
     }
 
-    fun warn(tag: String = TAG, callback: () -> String) {
+    fun warn(tag: String = TAG, msg: String) {
         if (!SVGALogger.isLogEnabled()) {
             return
         }
-        SVGALogger.getSVGALogger()?.warn(tag, callback.invoke())
+        SVGALogger.getSVGALogger()?.warn(tag, msg)
     }
 
-    fun error(tag: String = TAG, callback: () -> String) {
+    fun error(tag: String = TAG, msg: String) {
         if (!SVGALogger.isLogEnabled()) {
             return
         }
-        SVGALogger.getSVGALogger()?.error(tag, callback.invoke(), null)
+        SVGALogger.getSVGALogger()?.error(tag, msg, null)
     }
 
-    fun errorEx(tag: String, callback: () -> Throwable) {
+    fun error(tag: String, error: Throwable) {
         if (!SVGALogger.isLogEnabled()) {
             return
         }
-        val error = callback.invoke()
         SVGALogger.getSVGALogger()?.error(tag, error.message, error)
     }
 
-    fun error(tag: String = TAG, callback: () -> String, error: () -> Throwable) {
+    fun error(tag: String = TAG, msg: String, error: Throwable) {
         if (!SVGALogger.isLogEnabled()) {
             return
         }
-        SVGALogger.getSVGALogger()?.error(tag, callback.invoke(), error.invoke())
+        SVGALogger.getSVGALogger()?.error(tag, msg, error)
     }
 }

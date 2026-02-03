@@ -1,7 +1,6 @@
 package com.opensource.svgaplayer.entities
 
 import com.opensource.svgaplayer.proto.AudioEntity
-import java.io.FileInputStream
 
 internal class SVGAAudioEntity {
 

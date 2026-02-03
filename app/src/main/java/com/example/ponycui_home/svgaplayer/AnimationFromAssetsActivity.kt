@@ -27,16 +27,16 @@ class AnimationFromAssetsActivity : Activity() {
     }
 
     private fun loadAnimation() {
-        val name = "suofang.svga"
+        val name = "haki_test.svga"
         animationView.load(name) {
-            val nick = "阿斯顿撒感觉"
-            setDynamicText(
-                "nick",
-                SVGATextEntity(nick)
+            setDynamicImage(
+                "https://res.hakiapp.com/4d084d73ddc771f69ee9b5f00c32141d?imageslim|imageView2/1/w/100/h/100/format/png|roundPic/radius/!50p",
+                "avatar-1",
+                CircleCropTransFormation()
             )
             setDynamicImage(
-                "https://res.fancyliveapp.com/Fl2agTbJDqDCmz3k5533T9WooOBm?imageslim",
-                "sender_avatar",
+                "https://res.hakiapp.com/33acc6c6bb1f20af3725b3ab95ff0cac?imageslim|imageView2/1/w/100/h/100/format/png|roundPic/radius/!50p",
+                "avatar-2",
                 CircleCropTransFormation()
             )
         }

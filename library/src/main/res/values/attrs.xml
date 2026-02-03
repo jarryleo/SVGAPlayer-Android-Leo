@@ -7,7 +7,7 @@
         <attr name="loopCount" format="integer" />
         <attr name="clearsAfterStop" format="boolean" />
         <attr name="clearsAfterDetached" format="boolean" />
-        <attr name="clearsLastSourceAfterDetached" format="boolean" />
+        <attr name="clearsLastSourceOnDetached" format="boolean" />
         <attr name="fillMode" format="enum">
             <enum name="Backward" value="0" />
             <enum name="Forward" value="1" />

@@ -1,6 +1,5 @@
 package com.opensource.svgaplayer.utils
 
-import android.content.Context
 import android.net.Uri
 import java.io.File
 

@@ -35,9 +35,16 @@ open class FileDownloader {
             val cacheKey = SVGAFileCache.buildCacheKey(url)
             val cacheFile = SVGAFileCache.buildCacheFile(cacheKey)
             try {
-                LogUtils.info(TAG) { "================ file download start ================ \r\n url = $url" }
+                LogUtils.info(
+                    TAG, "================ file download start ================ " +
+                            "\r\n url = $url"
+                )
                 if (HttpResponseCache.getInstalled() == null) {
-                    LogUtils.error(TAG) { "在配置 HttpResponseCache 前 SVGAParser 无法缓存. 查看 https://github.com/yyued/SVGAPlayer-Android#cache " }
+                    LogUtils.error(
+                        TAG,
+                        "在配置 HttpResponseCache 前 SVGAParser 无法缓存."
+                                + " 查看 https://github.com/yyued/SVGAPlayer-Android#cache "
+                    )
                 }
 
                 (url.openConnection() as? HttpURLConnection)?.let {
@@ -63,18 +70,22 @@ open class FileDownloader {
                         }
                     }
                     if (isActive) {
-                        LogUtils.info(TAG) { "================ file download success ================" }
+                        LogUtils.info(
+                            TAG, "================ file download success ================"
+                        )
                         complete(cacheFile.inputStream())
                     } else {
-                        LogUtils.info(TAG) { "================ file download cancel ================" }
+                        LogUtils.info(
+                            TAG, "================ file download cancel ================"
+                        )
                         cacheFile.delete()
                         failure(CancellationException("download cancel"))
                     }
                 }
             } catch (e: Exception) {
                 cacheFile.delete()
-                LogUtils.error(TAG) { "================ file download fail ================" }
-                LogUtils.error(TAG) { "error: ${e.message}" }
+                LogUtils.error(TAG, "================ file download fail ================")
+                LogUtils.error(TAG, "error: ${e.message}")
                 e.printStackTrace()
                 failure(e)
             }

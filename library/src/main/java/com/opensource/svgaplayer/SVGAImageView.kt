@@ -16,7 +16,12 @@ import com.opensource.svgaplayer.url.UrlDecoderManager
 import com.opensource.svgaplayer.utils.SVGARange
 import com.opensource.svgaplayer.utils.SourceUtil
 import com.opensource.svgaplayer.utils.log.LogUtils
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.MainScope
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.lang.ref.WeakReference
 import java.net.URL
 import java.net.URLDecoder
@@ -30,7 +35,7 @@ open class SVGAImageView @JvmOverloads constructor(
     context: Context,
     attrs: AttributeSet? = null,
     defStyleAttr: Int = 0
-) : ImageView(context, attrs, defStyleAttr) {
+) : ImageView(context, attrs, defStyleAttr), CoroutineScope by MainScope() {
 
     private val TAG = "SVGAImageView"
 
@@ -52,7 +57,7 @@ open class SVGAImageView @JvmOverloads constructor(
     )
     var clearsAfterStop = false
     var clearsAfterDetached = true
-    var clearsLastSourceAfterDetached = false
+    var clearsLastSourceOnDetached = false
     var fillMode: FillMode = FillMode.Backward
     var callback: SVGACallback? = null
 
@@ -66,6 +71,7 @@ open class SVGAImageView @JvmOverloads constructor(
     private val mAnimatorUpdateListener by lazy {
         AnimatorUpdateListener(WeakReference(this))
     }
+    private var loadCallback: SVGAViewLoadCallback? = null
     private var mStartFrame = 0
     private var mEndFrame = 0
     private var volume = 1f
@@ -91,8 +97,8 @@ open class SVGAImageView @JvmOverloads constructor(
         clearsAfterStop = typedArray.getBoolean(R.styleable.SVGAImageView_clearsAfterStop, false)
         clearsAfterDetached =
             typedArray.getBoolean(R.styleable.SVGAImageView_clearsAfterDetached, true)
-        clearsLastSourceAfterDetached =
-            typedArray.getBoolean(R.styleable.SVGAImageView_clearsLastSourceAfterDetached, false)
+        clearsLastSourceOnDetached =
+            typedArray.getBoolean(R.styleable.SVGAImageView_clearsLastSourceOnDetached, false)
         mAntiAlias = typedArray.getBoolean(R.styleable.SVGAImageView_antiAlias, true)
         mAutoPlay = typedArray.getBoolean(R.styleable.SVGAImageView_autoPlay, true)
         typedArray.getString(R.styleable.SVGAImageView_fillMode)?.let {
@@ -138,18 +144,20 @@ open class SVGAImageView @JvmOverloads constructor(
         }
         //已有宽高才加载动画
         if ((width > 0 && height > 0) || config?.isOriginal == true) {
-            parserSource(source, config)
+            launch(Dispatchers.IO) {
+                parserSource(source, config)
+            }
         } else {
             requestLayout()
         }
         return this
     }
 
-    private fun parserSource(source: String?, config: SVGAConfig? = lastConfig) {
+    private suspend fun parserSource(source: String?, config: SVGAConfig? = lastConfig) {
         if (source.isNullOrEmpty()) return
         //设置动画属性
         loops = config?.loopCount ?: loops
-        mAutoPlay = config?.autoPlay ?: true
+        mAutoPlay = config?.autoPlay ?: mAutoPlay
         var cfg = config
         if (cfg != null && !cfg.isOriginal && cfg.frameWidth == 0 && cfg.frameHeight == 0) {
             cfg = cfg.copy(
@@ -166,6 +174,9 @@ open class SVGAImageView @JvmOverloads constructor(
             SVGAParser.init(context.applicationContext)
             parser = SVGAParser.shareParser()
         }
+        this.loadCallback?.cancel()
+        val callback = SVGAViewLoadCallback(WeakReference(this))
+        this.loadCallback = callback
         if (SourceUtil.isUrl(realUrl)) {
             val decode = try {
                 URLDecoder.decode(realUrl, "UTF-8")
@@ -184,36 +195,51 @@ open class SVGAImageView @JvmOverloads constructor(
                 return
             }
             loadingSource = realUrl
-            clear()
-            LogUtils.debug(TAG) { "load from url: $realUrl , last source: $lastSource" }
+            withContext(Dispatchers.Main) {
+                clear()
+            }
+            LogUtils.info(
+                TAG,
+                "view = ${hashCode()} load from url: $realUrl , last source: $lastSource"
+            )
             loadJob = parser?.decodeFromURL(
                 url,
                 config = cfg ?: SVGAConfig(frameWidth = width, frameHeight = height),
-                SVGAViewLoadCallback(this)
+                callback
             )
         } else if (SourceUtil.isFilePath(realUrl)) {
             if (loadingSource == realUrl && loadJob?.isActive == true) {
                 return
             }
             loadingSource = realUrl
-            clear()
-            LogUtils.debug(TAG) { "load from file: $realUrl , last source: $lastSource" }
+            withContext(Dispatchers.Main) {
+                clear()
+            }
+            LogUtils.info(
+                TAG,
+                "view = ${hashCode()} load from file: $realUrl , last source: $lastSource"
+            )
             loadJob = parser?.decodeFromFile(
                 realUrl,
                 config = cfg ?: SVGAConfig(frameWidth = width, frameHeight = height),
-                SVGAViewLoadCallback(this)
+                callback
             )
         } else {
             if (loadingSource == realUrl && loadJob?.isActive == true) {
                 return
             }
             loadingSource = realUrl
-            clear()
-            LogUtils.debug(TAG) { "load from assert: $realUrl , last source: $lastSource" }
+            withContext(Dispatchers.Main) {
+                clear()
+            }
+            LogUtils.info(
+                TAG,
+                "view = ${hashCode()} load from assert: $realUrl , last source: $lastSource"
+            )
             loadJob = parser?.decodeFromAssets(
                 realUrl,
                 config = cfg ?: SVGAConfig(frameWidth = width, frameHeight = height),
-                SVGAViewLoadCallback(this)
+                callback
             )
         }
     }
@@ -229,6 +255,8 @@ open class SVGAImageView @JvmOverloads constructor(
             getSVGADrawable()?.scaleType = scaleType
             if (mAutoPlay) {
                 play(null, false)
+            } else {
+                stepToFrame(1, false)
             }
         }
     }
@@ -264,12 +292,13 @@ open class SVGAImageView @JvmOverloads constructor(
             mAnimatorListener.weakView = WeakReference(this)
         }
         animator.addListener(mAnimatorListener)
-        LogUtils.info(TAG) {
-            "================ start animation ================ " +
+        LogUtils.info(
+            TAG, "================ start animation ================" +
+                    "\r\n view: ${hashCode()}" +
                     "\r\n source: $lastSource" +
                     "\r\n url: $loadingSource" +
                     "\r\n svgaMemorySize: ${getSvgaMemorySizeFormat()}(${getSvgaMemorySize()} Bytes)"
-        }
+        )
         if (reverse) {
             animator.reverse()
         } else {
@@ -320,9 +349,11 @@ open class SVGAImageView @JvmOverloads constructor(
                 setMethod.isAccessible = true
                 setMethod.invoke(animatorClass, 1.0f)
                 scale = 1.0
-                LogUtils.info(TAG) {
-                    "The animation duration scale has been reset to 1.0x, because you closed it on developer options."
-                }
+                LogUtils.info(
+                    TAG,
+                    "The animation duration scale has been reset to" +
+                            " 1.0x, because you closed it on developer options."
+                )
             }
         } catch (ignore: Exception) {
             ignore.printStackTrace()
@@ -358,7 +389,6 @@ open class SVGAImageView @JvmOverloads constructor(
         stopAnimation()
         val drawable = getSVGADrawable()
         if (drawable != null) {
-            drawable.unloadSound() //播放完一次后释放音频资源
             when (fillMode) {
                 FillMode.Backward -> {
                     drawable.currentFrame = mEndFrame
@@ -384,11 +414,12 @@ open class SVGAImageView @JvmOverloads constructor(
         setImageDrawable(null)
         if (loadJob?.isActive == true) loadJob?.cancel()
         loadJob = null
-        LogUtils.debug(TAG) { "clear : $lastSource" }
+        isAnimating = false
+        LogUtils.debug(TAG, "clear : $lastSource")
     }
 
     fun clearLastSource() {
-        LogUtils.debug(TAG) { "clear last source: $lastSource" }
+        LogUtils.debug(TAG, "clear last source: $lastSource")
         lastSource = null
     }
 
@@ -400,7 +431,9 @@ open class SVGAImageView @JvmOverloads constructor(
             }
         } else {
             if (isAnimating) {
-                pauseAnimation()
+                //这里暂停动画不改变动画状态，用于恢复可见后恢复动画
+                mAnimator?.pause()
+                getSVGADrawable()?.pause()
             }
         }
     }
@@ -424,12 +457,18 @@ open class SVGAImageView @JvmOverloads constructor(
         mAnimator?.pause()
         getSVGADrawable()?.pause()
         callback?.onPause()
+        isAnimating = false
     }
 
     open fun resumeAnimation() {
-        mAnimator?.resume()
         getSVGADrawable()?.resume()
         callback?.onResume()
+        if (mAnimator == null) {
+            play(null, false)
+        } else {
+            mAnimator?.resume()
+        }
+        isAnimating = true
     }
 
     fun stopAnimation() {
@@ -446,6 +485,7 @@ open class SVGAImageView @JvmOverloads constructor(
         if (clear) {
             getSVGADrawable()?.clear()
         }
+        isAnimating = false
     }
 
     fun setVideoItem(videoItem: SVGAVideoEntity?) {
@@ -471,7 +511,9 @@ open class SVGAImageView @JvmOverloads constructor(
         if (drawable == null) {
             if (width > 0 && height > 0) {
                 lastSource?.let {
-                    parserSource(it, lastConfig)
+                    launch(Dispatchers.IO) {
+                        parserSource(it, lastConfig)
+                    }
                 }
             }
             return
@@ -534,7 +576,7 @@ open class SVGAImageView @JvmOverloads constructor(
         if (clearsAfterDetached) {
             clear()
         }
-        if (clearsLastSourceAfterDetached){
+        if (clearsLastSourceOnDetached) {
             clearLastSource()
         }
     }
@@ -542,7 +584,9 @@ open class SVGAImageView @JvmOverloads constructor(
     override fun onLayout(changed: Boolean, left: Int, top: Int, right: Int, bottom: Int) {
         super.onLayout(changed, left, top, right, bottom)
         if (changed && width > 0 && height > 0 && lastSource != null && !isAnimating) {
-            parserSource(lastSource, lastConfig)
+            launch(Dispatchers.IO) {
+                parserSource(lastSource, lastConfig)
+            }
         }
     }
 

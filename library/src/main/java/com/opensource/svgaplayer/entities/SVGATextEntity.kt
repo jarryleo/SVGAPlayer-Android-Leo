@@ -12,7 +12,7 @@ import android.text.TextUtils
  */
 data class SVGATextEntity(
     var text: String = "",
-    var textSize: Float = 40f,
+    var textSize: Float = 20f,
     var scale: Float = 0.9f,
     var textColor: Int = Color.WHITE,
     var maxLines: Int = 1,

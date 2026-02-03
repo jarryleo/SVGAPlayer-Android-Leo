@@ -1,6 +1,6 @@
 package com.opensource.svgaplayer
 
-import android.view.View
+import java.lang.ref.WeakReference
 
 
 /** 简易调用 */
@@ -11,32 +11,28 @@ open class SVGASimpleCallback : SVGAParser.ParseCompletion {
     override fun onError() {}
 }
 
-class SVGAViewLoadCallback(private var svgaImageView: SVGAImageView?) : SVGASimpleCallback(),
-    View.OnAttachStateChangeListener {
-
-    init {
-        svgaImageView?.addOnAttachStateChangeListener(this)
-    }
+class SVGAViewLoadCallback(private var weakView: WeakReference<SVGAImageView>?) :
+    SVGASimpleCallback() {
 
     override fun onComplete(videoItem: SVGAVideoEntity) {
-        svgaImageView?.startAnimation(videoItem)
-        svgaImageView = null
+        weakView?.get()?.startAnimation(videoItem)
+        release()
     }
 
     override fun onError() {
-        svgaImageView?.let {
+        weakView?.get()?.let {
             it.onError?.invoke(it)
         }
-        svgaImageView = null
+        release()
     }
 
-    override fun onViewAttachedToWindow(v: View) {
+    fun cancel() {
+        release()
     }
 
-    override fun onViewDetachedFromWindow(v: View) {
-        if (v == svgaImageView) {
-            svgaImageView?.removeOnAttachStateChangeListener(this)
-            svgaImageView = null
-        }
+
+    private fun release() {
+        weakView?.clear()
+        weakView = null
     }
 }

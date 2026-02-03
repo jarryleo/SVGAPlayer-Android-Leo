@@ -21,6 +21,7 @@ import java.util.concurrent.ThreadPoolExecutor
  * Description : SVGAManager 初始化入口
  */
 object SVGAManager {
+    @JvmOverloads
     @JvmStatic
     fun init(
         context: Context,
