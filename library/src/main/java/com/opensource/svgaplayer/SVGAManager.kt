@@ -1,10 +1,13 @@
 package com.opensource.svgaplayer
 
 import android.content.Context
+import android.graphics.Bitmap
 import android.net.http.HttpResponseCache
 import com.opensource.svgaplayer.cache.SVGABitmapCache
 import com.opensource.svgaplayer.cache.SVGAFileCache
 import com.opensource.svgaplayer.cache.SVGAMemoryCache
+import com.opensource.svgaplayer.download.BitmapDownloadInterface
+import com.opensource.svgaplayer.download.BitmapDownloader
 import com.opensource.svgaplayer.download.FileDownloader
 import com.opensource.svgaplayer.url.UrlDecoder
 import com.opensource.svgaplayer.url.UrlDecoderManager
@@ -20,7 +23,10 @@ import java.util.concurrent.ThreadPoolExecutor
  * Date        :2024/2/23
  * Description : SVGAManager 初始化入口
  */
-object SVGAManager {
+object SVGAManager : BitmapDownloadInterface {
+
+    private var bitmapDownloader: BitmapDownloadInterface = BitmapDownloader
+
     @JvmOverloads
     @JvmStatic
     fun init(
@@ -62,6 +68,30 @@ object SVGAManager {
         loggerProxy?.let { logger ->
             SVGALogger.injectSVGALoggerImp(logger)
         }
+    }
+
+    /**
+     * 设置图片下载器
+     */
+    fun setBitmapDownload(bitmapDownloadInterface: BitmapDownloadInterface) {
+        bitmapDownloader = bitmapDownloadInterface
+    }
+
+    /**
+     * 下载图片并返回bitmap
+     */
+    override suspend fun downloadBitmap(
+        context: Context,
+        url: String,
+        reqWidth: Int,
+        reqHeight: Int
+    ): Bitmap? {
+        return bitmapDownloader.downloadBitmap(
+            context,
+            url,
+            reqWidth,
+            reqHeight
+        )
     }
 
     /**
