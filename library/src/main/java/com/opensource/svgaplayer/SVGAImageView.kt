@@ -77,7 +77,10 @@ open class SVGAImageView @JvmOverloads constructor(
     private var volume = 1f
 
     private var lastSource: String? = null
-    private var loadingSource: String? = null
+
+    //IO 线程(parserSource)写、主线程(回调校验/动画启动)读，需保证可见性
+    @Volatile
+    internal var loadingSource: String? = null
     private var lastConfig: SVGAConfig? = null
     private var loadJob: Job? = null
     private var dynamicBlock: (SVGADynamicEntity.() -> Unit)? = null
@@ -169,17 +172,27 @@ open class SVGAImageView @JvmOverloads constructor(
         val urlDecoder = UrlDecoderManager.getUrlDecoder()
         val realUrl =
             urlDecoder.decodeSvgaUrl(source, cfg?.frameWidth ?: width, cfg?.frameHeight ?: height)
+        //同一资源正在加载中：保留在途回调（加载完成后由它驱动播放），直接返回
+        if (loadingSource == realUrl && loadCallback?.isPending == true) {
+            LogUtils.info(TAG, "view = ${hashCode()} same source is loading, skip: $realUrl")
+            return
+        }
+        //清理旧动画与旧回调（clear 内部会取消 loadCallback）
+        withContext(Dispatchers.Main) {
+            clear()
+        }
         var parser = SVGAParser.shareParser()
         if (parser == null) {
             SVGAParser.init(context.applicationContext)
             parser = SVGAParser.shareParser()
         }
-        this.loadCallback?.cancel()
-        val callback = SVGAViewLoadCallback(WeakReference(this))
+        val callback = SVGAViewLoadCallback(realUrl, WeakReference(this))
         this.loadCallback = callback
         if (SourceUtil.isUrl(realUrl)) {
             val decode = try {
-                URLDecoder.decode(realUrl, "UTF-8")
+                withContext(Dispatchers.IO) {
+                    URLDecoder.decode(realUrl, "UTF-8")
+                }
             } catch (e: Exception) {
                 e.printStackTrace()
                 realUrl
@@ -191,13 +204,7 @@ open class SVGAImageView @JvmOverloads constructor(
                 onError?.invoke(this)
                 return
             }
-            if (loadingSource == realUrl && loadJob?.isActive == true) {
-                return
-            }
             loadingSource = realUrl
-            withContext(Dispatchers.Main) {
-                clear()
-            }
             LogUtils.info(
                 TAG,
                 "view = ${hashCode()} load from url: $realUrl , last source: $lastSource"
@@ -208,13 +215,7 @@ open class SVGAImageView @JvmOverloads constructor(
                 callback
             )
         } else if (SourceUtil.isFilePath(realUrl)) {
-            if (loadingSource == realUrl && loadJob?.isActive == true) {
-                return
-            }
             loadingSource = realUrl
-            withContext(Dispatchers.Main) {
-                clear()
-            }
             LogUtils.info(
                 TAG,
                 "view = ${hashCode()} load from file: $realUrl , last source: $lastSource"
@@ -225,13 +226,7 @@ open class SVGAImageView @JvmOverloads constructor(
                 callback
             )
         } else {
-            if (loadingSource == realUrl && loadJob?.isActive == true) {
-                return
-            }
             loadingSource = realUrl
-            withContext(Dispatchers.Main) {
-                clear()
-            }
             LogUtils.info(
                 TAG,
                 "view = ${hashCode()} load from assert: $realUrl , last source: $lastSource"
@@ -363,8 +358,10 @@ open class SVGAImageView @JvmOverloads constructor(
 
     private fun onAnimatorUpdate(animator: ValueAnimator?) {
         val drawable = getSVGADrawable() ?: return
-        if (!isVisible()) return
+        //无论可见与否，都先推进帧。仅在用户回调（onStep）时再判定可见性，
+        //避免“动画器在跑、但 currentFrame 被锁在初始值”导致用户视角下看似未播放
         drawable.currentFrame = animator?.animatedValue as Int
+        if (!isVisible()) return
         val percentage =
             (drawable.currentFrame + 1).toDouble() / drawable.videoItem.frames.toDouble()
         callback?.onStep(drawable.currentFrame, percentage)
@@ -406,6 +403,13 @@ open class SVGAImageView @JvmOverloads constructor(
     }
 
     fun clear() {
+        //clear 不保证伴随 stopAnimation（如列表不 detach 的 rebind、parserSource 预加载清理），
+        //无限循环动画器需在此一并停掉，否则空转成僵尸直到下次成功播放才被回收。
+        //先摘监听器再 cancel：不派发 onAnimationCancel/onAnimationEnd，避免改变用户回调时序
+        mAnimator?.removeAllListeners()
+        mAnimator?.removeAllUpdateListeners()
+        mAnimator?.cancel()
+        mAnimator = null
         getSVGADrawable()?.cleared = true
         getSVGADrawable()?.clear()
         //清理动态添加的数据
@@ -414,6 +418,11 @@ open class SVGAImageView @JvmOverloads constructor(
         setImageDrawable(null)
         if (loadJob?.isActive == true) loadJob?.cancel()
         loadJob = null
+        //挂起的加载回调一并失效，保证 clear 后可以重新加载
+        loadCallback?.cancel()
+        loadCallback = null
+        //复位加载来源，避免下次 bind 出现“看似在加载但 loadCallback 已清空”的脆弱状态
+        loadingSource = null
         isAnimating = false
         LogUtils.debug(TAG, "clear : $lastSource")
     }
@@ -511,6 +520,7 @@ open class SVGAImageView @JvmOverloads constructor(
         if (drawable == null) {
             if (width > 0 && height > 0) {
                 lastSource?.let {
+                    markParserSourceTriggered()
                     launch(Dispatchers.IO) {
                         parserSource(it, lastConfig)
                     }
@@ -527,6 +537,13 @@ open class SVGAImageView @JvmOverloads constructor(
                 ) * it.duration).toLong()
             }
         }
+    }
+
+    //最近一次触发 parserSource 的时间戳（主线程维护），供 onLayout 抑制“onAttachedToWindow → onLayout”双发
+    private var lastParserSourceTriggerAt = 0L
+
+    private fun markParserSourceTriggered() {
+        lastParserSourceTriggerAt = android.os.SystemClock.uptimeMillis()
     }
 
     fun stepToPercentage(percentage: Double, andPlay: Boolean) {
@@ -583,7 +600,11 @@ open class SVGAImageView @JvmOverloads constructor(
 
     override fun onLayout(changed: Boolean, left: Int, top: Int, right: Int, bottom: Int) {
         super.onLayout(changed, left, top, right, bottom)
-        if (changed && width > 0 && height > 0 && lastSource != null && !isAnimating) {
+        if (changed && width > 0 && height > 0 && lastSource != null && !isAnimating
+            //抑制 onAttachedToWindow(stepToFrame) → onLayout 的重复触发，避免两个 parserSource 并发同 view 时丢 cb
+            && android.os.SystemClock.uptimeMillis() - lastParserSourceTriggerAt > 100
+        ) {
+            markParserSourceTriggered()
             launch(Dispatchers.IO) {
                 parserSource(lastSource, lastConfig)
             }

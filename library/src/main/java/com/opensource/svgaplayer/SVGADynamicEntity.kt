@@ -13,6 +13,7 @@ import com.opensource.svgaplayer.bitmap.SVGABitmapFileDecoder
 import com.opensource.svgaplayer.bitmap.SVGABitmapInputStreamDecoder
 import com.opensource.svgaplayer.bitmap.SVGABitmapResDecoder
 import com.opensource.svgaplayer.coroutine.SvgaCoroutineManager
+import com.opensource.svgaplayer.download.BitmapDownloader
 import com.opensource.svgaplayer.entities.SVGATextEntity
 import com.opensource.svgaplayer.url.UrlDecoderManager
 import com.opensource.svgaplayer.utils.BitmapTransformation

@@ -38,6 +38,12 @@ class SVGAParser private constructor(context: Context) {
     private var mContext = context.applicationContext
     private val handler = Handler(Looper.getMainLooper())
 
+    /**
+     * 与等待队列共用的锁：保证“读内存缓存 + 入队”与“写内存缓存 + 移除通知”两个复合操作互斥，
+     * 否则两者交错会出现个别等待者既收不到 onComplete 也收不到 onError（列表批量加载同一动画时表现为个别不播放）。
+     */
+    private val loadStateLock get() = SVGAMemoryLoadingQueue.lock
+
     interface ParseCompletion {
         fun onComplete(videoItem: SVGAVideoEntity)
         fun onError()
@@ -90,6 +96,21 @@ class SVGAParser private constructor(context: Context) {
             return null
         }
         //加载文件数据
+        return startDecodeFromFile(path, config, callback, playCallback, memoryCacheKey)
+    }
+
+    /**
+     * 实际执行文件读取解析（跳过内存缓存与等待队列，供首次加载与取消后的接管重载共用）。
+     * 接管重载时 [callback] 为 null，完成后仅通知等待队列；[isRestart] 阻止取消回调里的递归重启。
+     */
+    private fun startDecodeFromFile(
+        path: String,
+        config: SVGAConfig,
+        callback: ParseCompletion?,
+        playCallback: PlayCallback?,
+        memoryCacheKey: String?,
+        isRestart: Boolean = false
+    ): Job? {
         return SvgaCoroutineManager.launchIo {
             try {
                 val cacheKey = SVGAFileCache.buildCacheKey(path)
@@ -124,12 +145,25 @@ class SVGAParser private constructor(context: Context) {
                         alias = path
                     )
                 } ?: run {
-                    memoryCacheKey?.let { SVGAMemoryLoadingQueue.removeItem(memoryCacheKey) }
+                    notifyQueueError(memoryCacheKey, callback)
                     invokeErrorCallback(Exception("file inputStream is null"), callback, path)
                 }
             } catch (e: Exception) {
-                memoryCacheKey?.let { SVGAMemoryLoadingQueue.removeItem(memoryCacheKey) }
+                notifyQueueError(memoryCacheKey, callback)
                 invokeErrorCallback(e, callback, path)
+            }
+        }.apply {
+            invokeOnCompletion { exception ->
+                if (exception is CancellationException) {
+                    LogUtils.info(TAG, "================ decode $path from file canceled ================")
+                    //加载者被取消：仍有等待者则接管重载；接管自身被取消或无等待者时给等待队列补发错误
+                    val restarted = !isRestart && restartDecodeIfWaiting(memoryCacheKey, path) {
+                        startDecodeFromFile(path, config, null, null, memoryCacheKey, isRestart = true)
+                    }
+                    if (!restarted) {
+                        notifyQueueError(memoryCacheKey, callback)
+                    }
+                }
             }
         }
     }
@@ -163,6 +197,21 @@ class SVGAParser private constructor(context: Context) {
             return null
         }
         //加载Assets数据
+        return startDecodeFromAssets(name, config, callback, playCallback, memoryCacheKey)
+    }
+
+    /**
+     * 实际执行 assets 读取解析（跳过内存缓存与等待队列，供首次加载与取消后的接管重载共用）。
+     * 接管重载时 [callback] 为 null，完成后仅通知等待队列；[isRestart] 阻止取消回调里的递归重启。
+     */
+    private fun startDecodeFromAssets(
+        name: String,
+        config: SVGAConfig,
+        callback: ParseCompletion?,
+        playCallback: PlayCallback?,
+        memoryCacheKey: String?,
+        isRestart: Boolean = false
+    ): Job? {
         return SvgaCoroutineManager.launchIo {
             try {
                 mContext?.assets?.open(name)?.let {
@@ -177,12 +226,25 @@ class SVGAParser private constructor(context: Context) {
                         alias = name
                     )
                 } ?: run {
-                    memoryCacheKey?.let { SVGAMemoryLoadingQueue.removeItem(memoryCacheKey) }
+                    notifyQueueError(memoryCacheKey, callback)
                     invokeErrorCallback(Exception("assets inputStream is null"), callback, name)
                 }
             } catch (e: Exception) {
-                memoryCacheKey?.let { SVGAMemoryLoadingQueue.removeItem(memoryCacheKey) }
+                notifyQueueError(memoryCacheKey, callback)
                 invokeErrorCallback(e, callback, name)
+            }
+        }.apply {
+            invokeOnCompletion { exception ->
+                if (exception is CancellationException) {
+                    LogUtils.info(TAG, "================ decode $name from assets canceled ================")
+                    //加载者被取消：仍有等待者则接管重载；接管自身被取消或无等待者时给等待队列补发错误
+                    val restarted = !isRestart && restartDecodeIfWaiting(memoryCacheKey, name) {
+                        startDecodeFromAssets(name, config, null, null, memoryCacheKey, isRestart = true)
+                    }
+                    if (!restarted) {
+                        notifyQueueError(memoryCacheKey, callback)
+                    }
+                }
             }
         }
     }
@@ -213,6 +275,23 @@ class SVGAParser private constructor(context: Context) {
         if (decodeFromMemoryCacheKey(memoryCacheKey, config, callback, playCallback, urlPath)) {
             return null
         }
+        return startDecodeFromURL(url, config, callback, playCallback, memoryCacheKey)
+    }
+
+    /**
+     * 实际执行磁盘缓存读取 / 下载解析（跳过内存缓存与等待队列，供首次加载与取消后的接管重载共用）。
+     * 接管重载时 [callback] 为 null，完成后仅通知等待队列；此时 [isRestart] 为 true，
+     * 用于阻止其 invokeOnCompletion 再次触发 restart 递归（避免 App 关闭/作用域级联取消时的协程级联）。
+     */
+    private fun startDecodeFromURL(
+        url: URL,
+        config: SVGAConfig,
+        callback: ParseCompletion?,
+        playCallback: PlayCallback?,
+        memoryCacheKey: String?,
+        isRestart: Boolean = false
+    ): Job? {
+        val urlPath = url.toString()
         val cacheKey = SVGAFileCache.buildCacheKey(url)
         val cachedType = SVGAFileCache.getCachedType(cacheKey)
         return if (cachedType != null) { //加载本地缓存数据
@@ -237,7 +316,6 @@ class SVGAParser private constructor(context: Context) {
                     )
                 }
             }
-            return null
         } else { //加载网络数据（下载资源）
             LogUtils.info(TAG, "no cached, prepare to download")
             fileDownloader.resume(url, {
@@ -251,9 +329,14 @@ class SVGAParser private constructor(context: Context) {
                     memoryCacheKey,
                     alias = urlPath
                 )
-            }, {
-                memoryCacheKey?.let { SVGAMemoryLoadingQueue.removeItem(memoryCacheKey) }
-                this.invokeErrorCallback(it, callback, alias = urlPath)
+            }, { e ->
+                if (e is CancellationException) {
+                    //下载被取消：错误通知交给下方 invokeOnCompletion 统一决策（等待队列可能接管重载），
+                    //这里直接补发会把等待队列整体清空误伤其他 view
+                    return@resume
+                }
+                notifyQueueError(memoryCacheKey, callback)
+                this.invokeErrorCallback(e, callback, alias = urlPath)
             })
         }.apply {
             invokeOnCompletion { exception ->
@@ -261,10 +344,64 @@ class SVGAParser private constructor(context: Context) {
                     LogUtils.info(
                         TAG, "================ decode from url canceled: $urlPath ================"
                     )
-                    memoryCacheKey?.let { SVGAMemoryLoadingQueue.removeItem(memoryCacheKey) }
+                    //接管重载自身被取消（典型：App 退出、scope 级联）时不再递归重启，
+                    //直接清空等待队列并补发错误，避免协程级联导致的对象增长
+                    val restarted = !isRestart && restartDecodeIfWaiting(memoryCacheKey, urlPath) {
+                        startDecodeFromURL(url, config, null, null, memoryCacheKey, isRestart = true)
+                    }
+                    if (!restarted) {
+                        notifyQueueError(memoryCacheKey, callback)
+                    }
                 }
             }
         }
+    }
+
+    /**
+     * 加载任务被取消时，若仍有 view 在等待同一资源（列表批量加载同一动画场景），处理等待者：
+     * 1. 缓存已被其他路径填充 → 复用缓存实体直接通知等待队列，避免重复下载/解析；
+     * 2. 缓存空 + 仍有等待者 → 发起一次无直接回调的接管加载（由等待者接管完成后的统一通知）；
+     * 3. 缓存空 + 无等待者 → 返回 false，由调用方按常规路径给直接回调补发错误。
+     * [reload] 为具体资源（URL/文件/assets）的接管重载动作，须以 isRestart = true 阻断递归重启。
+     */
+    private fun restartDecodeIfWaiting(
+        memoryCacheKey: String?,
+        alias: String?,
+        reload: () -> Unit
+    ): Boolean {
+        if (memoryCacheKey.isNullOrEmpty()) return false
+        //与完成路径使用同一把锁原子处理：复用缓存避免重复下载，或确认仍需重启动
+        var cachedEntity: SVGAVideoEntity? = null
+        var waiters: List<SVGAMemoryLoadingQueue.SVGAMemoryLoadingItem>? = null
+        val shouldRestart = synchronized(loadStateLock) {
+            cachedEntity = SVGAMemoryCache.INSTANCE.getData(memoryCacheKey)
+            if (cachedEntity != null) {
+                //缓存已被填充：清空等待队列，复用已就绪实体
+                waiters = SVGAMemoryLoadingQueue.removeItem(memoryCacheKey)
+                false
+            } else {
+                SVGAMemoryLoadingQueue.inQueue(memoryCacheKey)
+            }
+        }
+        if (cachedEntity != null) {
+            LogUtils.info(
+                TAG,
+                "cancel handler: cache hit, notify ${waiters?.size ?: 0} waiter(s) from cache: $alias"
+            )
+            val entity = cachedEntity
+            handler.post {
+                waiters?.forEach {
+                    it.callback?.onComplete(entity)
+                }
+            }
+            return true
+        }
+        if (!shouldRestart) return false
+        LogUtils.info(TAG, "restart decode for waiting queue: $alias")
+        SvgaCoroutineManager.launchIo {
+            reload()
+        }
+        return true
     }
 
     /**
@@ -326,7 +463,7 @@ class SVGAParser private constructor(context: Context) {
                     }
                 }
             } catch (e: Exception) {
-                memoryCacheKey?.let { SVGAMemoryLoadingQueue.removeItem(memoryCacheKey) }
+                notifyQueueError(memoryCacheKey, callback)
                 svgaFile.delete() //解码失败删除文件，否则一直失败
                 invokeErrorCallback(e, callback, alias)
             } finally {
@@ -400,7 +537,7 @@ class SVGAParser private constructor(context: Context) {
                     }
                 }
             } catch (e: java.lang.Exception) {
-                memoryCacheKey?.let { SVGAMemoryLoadingQueue.removeItem(memoryCacheKey) }
+                notifyQueueError(memoryCacheKey, callback)
                 invokeErrorCallback(e, callback, alias)
             } finally {
                 if (closeInputStream) {
@@ -448,20 +585,20 @@ class SVGAParser private constructor(context: Context) {
                 callback?.onComplete(videoItem)
             }
         } else {
-            //存入内存缓存
-            SVGAMemoryCache.INSTANCE.putData(cacheKey, videoItem)
-            val inQueue = SVGAMemoryLoadingQueue.inQueue(cacheKey)
-            if (inQueue) {
-                //通知等待队列
-                handler.post {
-                    val itemList = SVGAMemoryLoadingQueue.removeItem(cacheKey)
-                    itemList?.forEach {
-                        it.callback?.onComplete(videoItem)
-                    }
-                }
-            } else {
-                handler.post {
-                    callback?.onComplete(videoItem)
+            //写缓存与移除等待队列必须原子完成：之前入队的等待者必定被本次通知覆盖，
+            //之后到达的调用必定命中缓存走直接回调，不存在两边都漏掉的窗口
+            var waiters: List<SVGAMemoryLoadingQueue.SVGAMemoryLoadingItem>? = null
+            synchronized(loadStateLock) {
+                //存入内存缓存
+                SVGAMemoryCache.INSTANCE.putData(cacheKey, videoItem)
+                waiters = SVGAMemoryLoadingQueue.removeItem(cacheKey)
+            }
+            //直接回调与等待队列一并通知。二者角色互斥（加载者不入队、入队者不走直接回调），
+            //不能像旧逻辑一样二选一，否则内存缓存命中路径的直接回调会被吞掉
+            handler.post {
+                callback?.onComplete(videoItem)
+                waiters?.forEach {
+                    it.callback?.onComplete(videoItem)
                 }
             }
         }
@@ -477,6 +614,23 @@ class SVGAParser private constructor(context: Context) {
         //LogUtils.error(TAG, "$alias parse error", e)
         handler.post {
             callback?.onError()
+        }
+    }
+
+    /**
+     * 解码失败/取消时移除等待队列，并给排队等待的回调补发 onError，
+     * 避免等待方既收不到 onComplete 也收不到 onError 而静默卡死。
+     * 直接回调由 invokeErrorCallback 单独通知，这里排除避免双发。
+     */
+    private fun notifyQueueError(memoryCacheKey: String?, directCallback: ParseCompletion?) {
+        memoryCacheKey ?: return
+        val itemList = SVGAMemoryLoadingQueue.removeItem(memoryCacheKey) ?: return
+        handler.post {
+            itemList.forEach { item ->
+                if (item.callback !== directCallback) {
+                    item.callback?.onError()
+                }
+            }
         }
     }
 
@@ -563,7 +717,7 @@ class SVGAParser private constructor(context: Context) {
                     }
                 }
             } catch (e: Exception) {
-                memoryCacheKey?.let { SVGAMemoryLoadingQueue.removeItem(memoryCacheKey) }
+                notifyQueueError(memoryCacheKey, callback)
                 invokeErrorCallback(e, callback, alias)
             }
         }
@@ -571,7 +725,7 @@ class SVGAParser private constructor(context: Context) {
 
     /**
      * 加载内存缓存
-     * @return true内部已将数据通过接口返回，不用再加载
+     * @return true内部已将数据通过接口返回（缓存命中或已入队等待），不用再加载
      */
     private fun decodeFromMemoryCacheKey(
         memoryCacheKey: String?,
@@ -580,35 +734,41 @@ class SVGAParser private constructor(context: Context) {
         playCallback: PlayCallback?,
         alias: String?
     ): Boolean {
-        return if (config.isCacheToMemory && !memoryCacheKey.isNullOrEmpty()) { //加载内存缓存
-            //获取内存缓存
-            val entity = SVGAMemoryCache.INSTANCE.getData(memoryCacheKey)
-            if (entity != null){
+        if (!config.isCacheToMemory || memoryCacheKey.isNullOrEmpty()) { //不使用内存缓存
+            return false
+        }
+        //“读缓存 + 入队”与完成路径的“写缓存 + 移除”使用同一把锁，原子决策：
+        //要么命中缓存走直接回调，要么在完成通知发出前成功入队，杜绝两边交错的漏通知
+        var cachedEntity: SVGAVideoEntity? = null
+        var joinLoading = false
+        synchronized(loadStateLock) {
+            cachedEntity = SVGAMemoryCache.INSTANCE.getData(memoryCacheKey)
+            if (cachedEntity == null) {
+                //已有同资源在途加载：入队等待统一通知；否则当前调用是加载者（不入队，走直接回调）
+                joinLoading = SVGAMemoryLoadingQueue.enqueue(
+                    memoryCacheKey,
+                    SVGAMemoryLoadingQueue.SVGAMemoryLoadingItem(callback)
+                )
                 LogUtils.info(
                     TAG,
-                    "decodeFromMemoryCacheKey key=$memoryCacheKey"
+                    "decodeFromMemoryCacheKey enqueue $memoryCacheKey, joinLoading = $joinLoading"
                 )
+            }
+        }
+        if (cachedEntity != null) {
+            LogUtils.info(
+                TAG,
+                "decodeFromMemoryCacheKey key=$memoryCacheKey"
+            )
+            cachedEntity?.let { entity ->
                 entity.prepare({
                     LogUtils.info(TAG, "decodeFromMemoryCacheKey prepare success")
                     this.invokeCompleteCallback(entity, callback, alias = alias)
                 }, playCallback)
-                return true
             }
-            //查询等待队列
-            val inQueue = SVGAMemoryLoadingQueue.inQueue(memoryCacheKey)
-            //加入等待队列
-            SVGAMemoryLoadingQueue.addItem(
-                memoryCacheKey,
-                SVGAMemoryLoadingQueue.SVGAMemoryLoadingItem(callback)
-            )
-            LogUtils.info(
-                TAG,
-                "decodeFromMemoryCacheKey addItem $memoryCacheKey, inQueue = $inQueue"
-            )
-            return inQueue
-        } else {
-            false
+            return true
         }
+        return joinLoading
     }
 
     // 是否是 zip 文件

@@ -132,18 +132,18 @@ class SVGAVideoEntity {
     }
 
     private fun prepareLoadSuccessCallback() {
-        mCallback.get()?.invoke()
-        mCallback.set(null)
+        //原子"取并清"：声音加载完成回调与3秒兜底延迟可能产生双完成信号，保证回调只触发一次
+        mCallback.getAndSet(null)?.invoke()
     }
 
     internal fun prepare(callback: () -> Unit, playCallback: SVGAParser.PlayCallback?) {
-        val lastCallback = mCallback.get()
-        if (lastCallback != null) {
+        //判断空位与注册必须原子：并发命中内存缓存时，两个调用交错 get/set 会互相覆盖回调，
+        //被覆盖的一方永远收不到完成通知（列表批量加载同一动画时表现为个别不播放）
+        if (!mCallback.compareAndSet(null, callback)) {
             //上一个回调未执行完毕，当前回调直接执行
             callback.invoke()
             return
         }
-        mCallback.set(callback)
         mPlayCallback = playCallback
         val item = movieItem
         if (item == null) {
