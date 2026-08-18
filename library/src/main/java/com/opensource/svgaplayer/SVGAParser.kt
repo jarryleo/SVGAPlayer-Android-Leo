@@ -5,6 +5,7 @@ import android.content.Context
 import android.net.Uri
 import android.os.Handler
 import android.os.Looper
+import com.opensource.svgaplayer.cache.SVGADiskLoadingQueue
 import com.opensource.svgaplayer.cache.SVGAFileCache
 import com.opensource.svgaplayer.cache.SVGAMemoryCache
 import com.opensource.svgaplayer.cache.SVGAMemoryLoadingQueue
@@ -19,6 +20,7 @@ import java.io.BufferedInputStream
 import java.io.ByteArrayOutputStream
 import java.io.File
 import java.io.FileInputStream
+import java.io.FileNotFoundException
 import java.io.FileOutputStream
 import java.io.IOException
 import java.io.InputStream
@@ -293,8 +295,15 @@ class SVGAParser private constructor(context: Context) {
     ): Job? {
         val urlPath = url.toString()
         val cacheKey = SVGAFileCache.buildCacheKey(url)
+        //磁盘下载去重：同 URL 已有在途下载则入队等待，避免两个 FileDownloader 并发写同一 cacheFile。
+        //等待者拿到的是代理 Job：取消（view 回收）只把自己移出队列，不会误杀加载者的下载
+        val (joined, proxyJob) = SVGADiskLoadingQueue.joinOrStart(cacheKey, callback, playCallback, config)
+        if (joined) {
+            LogUtils.info(TAG, "disk load in flight, join as waiter: $urlPath")
+            return proxyJob
+        }
         val cachedType = SVGAFileCache.getCachedType(cacheKey)
-        return if (cachedType != null) { //加载本地缓存数据
+        val job = if (cachedType != null) { //加载本地缓存数据
             LogUtils.info(TAG, "this url has disk cached")
             SvgaCoroutineManager.launchIo {
                 if (cachedType == SVGAFileCache.Type.ZIP) {
@@ -338,7 +347,9 @@ class SVGAParser private constructor(context: Context) {
                 notifyQueueError(memoryCacheKey, callback)
                 this.invokeErrorCallback(e, callback, alias = urlPath)
             })
-        }.apply {
+        }
+        SVGADiskLoadingQueue.registerJob(cacheKey, job)
+        return job.apply {
             invokeOnCompletion { exception ->
                 if (exception is CancellationException) {
                     LogUtils.info(
@@ -351,6 +362,23 @@ class SVGAParser private constructor(context: Context) {
                     }
                     if (!restarted) {
                         notifyQueueError(memoryCacheKey, callback)
+                    }
+                    //磁盘队列接管：有等待者时才清掉 in-flight 并重启下载（等待者仍在 loadingMap，
+                    //由接管下载完成时通知）；无等待者的普通 clear 不重启——
+                    //否则取消反而触发一次后台全量重下，列表滑动同一 URL 时反复下载且永远下不完
+                    val takeover = !isRestart && SVGADiskLoadingQueue.prepareTakeover(cacheKey)
+                    if (takeover) {
+                        LogUtils.info(
+                            TAG, "disk loader canceled, start takeover for waiter(s): $urlPath"
+                        )
+                        SvgaCoroutineManager.launchIo {
+                            startDecodeFromURL(url, config, null, null, memoryCacheKey, isRestart = true)
+                        }
+                    } else {
+                        //接管递归阻断或无等待者：清空队列，给剩余等待者发 onError
+                        SVGADiskLoadingQueue.cancelAndTakeWaiters(cacheKey)?.forEach {
+                            handler.post { it.callback?.onError() }
+                        }
                     }
                 }
             }
@@ -417,6 +445,17 @@ class SVGAParser private constructor(context: Context) {
     ) {
         SvgaCoroutineManager.launchIo {
             val svgaFile = SVGAFileCache.buildCacheFile(cacheKey)
+            //二次校验：从 getCachedType 通过到 launchIo 真正打开文件之间，
+            //文件可能已被并发的取消/失败路径删除（FileDownloader.kt:81/86），
+            //此时直接走下载路径而非报 parser error
+            if (!svgaFile.exists()) {
+                LogUtils.info(
+                    TAG,
+                    "================ decode $alias cache file missing before open, fallback to download ================"
+                )
+                fallbackToDownloadFromCache(cacheKey, alias, config, callback, playCallback, memoryCacheKey)
+                return@launchIo
+            }
             try {
                 LogUtils.info(
                     TAG,
@@ -462,6 +501,13 @@ class SVGAParser private constructor(context: Context) {
                         }
                     }
                 }
+            } catch (e: FileNotFoundException) {
+                //检测到检查后被并发路径删除的极端竞态，同样走下载路径
+                LogUtils.info(
+                    TAG,
+                    "================ decode $alias cache file missing at open, fallback to download ================"
+                )
+                fallbackToDownloadFromCache(cacheKey, alias, config, callback, playCallback, memoryCacheKey)
             } catch (e: Exception) {
                 notifyQueueError(memoryCacheKey, callback)
                 svgaFile.delete() //解码失败删除文件，否则一直失败
@@ -472,6 +518,36 @@ class SVGAParser private constructor(context: Context) {
                     "================ decode $alias from svga cachel file to entity end ================"
                 )
             }
+        }
+    }
+
+    /**
+     * [decodeFromSVGAFileCacheKey] 发现缓存文件已被并发路径删除时的兜底：直接重走下载路径。
+     * 用 isRestart = true 阻断取消时的递归重启。alias 非 URL 时（理论上不会发生）走错误通知。
+     */
+    private fun fallbackToDownloadFromCache(
+        cacheKey: String,
+        alias: String?,
+        config: SVGAConfig,
+        callback: ParseCompletion?,
+        playCallback: PlayCallback?,
+        memoryCacheKey: String?
+    ) {
+        try {
+            //兜底发起方自身（命中缓存分支的外层 Job）仍占着 in-flight，不清掉则
+            //下方 joinOrStart 把自己判为等待者：下载永不启动、该 URL 之后所有加载永久卡死
+            SVGADiskLoadingQueue.clearInFlight(cacheKey)
+            startDecodeFromURL(
+                URL(alias ?: ""),
+                config,
+                callback,
+                playCallback,
+                memoryCacheKey,
+                isRestart = true
+            )
+        } catch (e: Exception) {
+            notifyQueueError(memoryCacheKey, callback)
+            invokeErrorCallback(e, callback, alias)
         }
     }
 
@@ -602,6 +678,8 @@ class SVGAParser private constructor(context: Context) {
                 }
             }
         }
+        //磁盘下载队列等待者通知：仅 alias 是 URL 且对应 cacheKey 有等待者时生效
+        notifyDiskWaiters(alias, videoItem)
     }
 
     private fun invokeErrorCallback(
@@ -614,6 +692,47 @@ class SVGAParser private constructor(context: Context) {
         //LogUtils.error(TAG, "$alias parse error", e)
         handler.post {
             callback?.onError()
+        }
+        //磁盘下载队列等待者通知：解析失败时给等待者补发 onError
+        notifyDiskWaiters(alias, null)
+    }
+
+    /**
+     * 通知磁盘下载队列等待者。
+     * [entity] 非 null → 解析成功，通知 onComplete；null → 解析失败，通知 onError。
+     * alias 非 URL（资产/文件路径）时直接跳过，避免对其他路径产生误伤。
+     */
+    private fun notifyDiskWaiters(alias: String?, entity: SVGAVideoEntity?) {
+        if (alias.isNullOrEmpty()) return
+        val url = try {
+            URL(alias)
+        } catch (e: Exception) {
+            return
+        }
+        val diskCacheKey = SVGAFileCache.buildCacheKey(url)
+        val waiters = if (entity != null) {
+            SVGADiskLoadingQueue.completeAndTake(diskCacheKey)
+        } else {
+            SVGADiskLoadingQueue.cancelAndTakeWaiters(diskCacheKey)
+        } ?: return
+        handler.post {
+            if (entity != null) {
+                waiters.forEach {
+                    if (it.config.frameWidth == entity.requestFrameWidth &&
+                        it.config.frameHeight == entity.requestFrameHeight
+                    ) {
+                        it.callback?.onComplete(entity)
+                    } else {
+                        //等待者与加载者的解码尺寸不同：共享 entity 会拿到按他人尺寸解码的 bitmap，
+                        //改为按自身 config 重走解析（磁盘缓存已就绪，直接命中本地缓存）
+                        startDecodeFromURL(
+                            url, it.config, it.callback, it.playCallback, null, isRestart = true
+                        )
+                    }
+                }
+            } else {
+                waiters.forEach { it.callback?.onError() }
+            }
         }
     }
 

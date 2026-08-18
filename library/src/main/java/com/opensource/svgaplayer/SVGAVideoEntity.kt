@@ -53,6 +53,10 @@ class SVGAVideoEntity {
     private var mFrameHeight = 0
     private var mFrameWidth = 0
 
+    /** 解码时请求的尺寸（来自 SVGAConfig），磁盘下载队列据此判断等待者能否共享本实体 */
+    internal val requestFrameWidth: Int get() = mFrameWidth
+    internal val requestFrameHeight: Int get() = mFrameHeight
+
     //这里可能会持有外部View，如果内存缓存会导致泄漏
     private var mPlayCallback: SVGAParser.PlayCallback? = null
     private val job = SupervisorJob()
