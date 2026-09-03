@@ -1,7 +1,6 @@
 package com.opensource.svgaplayer
 
 import android.animation.Animator
-import android.animation.ValueAnimator
 import android.annotation.SuppressLint
 import android.content.Context
 import android.graphics.Rect
@@ -10,7 +9,6 @@ import android.text.format.Formatter
 import android.util.AttributeSet
 import android.view.MotionEvent
 import android.view.View
-import android.view.animation.LinearInterpolator
 import android.widget.ImageView
 import com.opensource.svgaplayer.url.UrlDecoderManager
 import com.opensource.svgaplayer.utils.SVGARange
@@ -32,9 +30,7 @@ import java.net.URLDecoder
  */
 @SuppressLint("ObsoleteSdkInt", "UNUSED")
 open class SVGAImageView @JvmOverloads constructor(
-    context: Context,
-    attrs: AttributeSet? = null,
-    defStyleAttr: Int = 0
+    context: Context, attrs: AttributeSet? = null, defStyleAttr: Int = 0
 ) : ImageView(context, attrs, defStyleAttr), CoroutineScope by MainScope() {
 
     private val TAG = "SVGAImageView"
@@ -51,8 +47,7 @@ open class SVGAImageView @JvmOverloads constructor(
     var loops = 0
 
     @Deprecated(
-        "It is recommended to use clearAfterDetached, or manually call to SVGAVideoEntity#clear." +
-                "If you just consider cleaning up the canvas after playing, you can use FillMode#Clear.",
+        "It is recommended to use clearAfterDetached, or manually call to SVGAVideoEntity#clear." + "If you just consider cleaning up the canvas after playing, you can use FillMode#Clear.",
         level = DeprecationLevel.WARNING
     )
     var clearsAfterStop = false
@@ -61,20 +56,16 @@ open class SVGAImageView @JvmOverloads constructor(
     var fillMode: FillMode = FillMode.Backward
     var callback: SVGACallback? = null
 
-    private var mAnimator: ValueAnimator? = null
     private var mItemClickAreaListener: SVGAClickAreaListener? = null
     private var mAntiAlias = true
     private var mAutoPlay = true
-    private val mAnimatorListener by lazy {
-        AnimatorListener(WeakReference(this))
-    }
-    private val mAnimatorUpdateListener by lazy {
-        AnimatorUpdateListener(WeakReference(this))
-    }
     private var loadCallback: SVGAViewLoadCallback? = null
     private var mStartFrame = 0
     private var mEndFrame = 0
     private var volume = 1f
+
+    //共享动画时钟中的会话；为 null 表示当前没有在播/暂停中的动画
+    private var tickerSession: SVGAAnimationTicker.Session? = null
 
     private var lastSource: String? = null
 
@@ -164,8 +155,7 @@ open class SVGAImageView @JvmOverloads constructor(
         var cfg = config
         if (cfg != null && !cfg.isOriginal && cfg.frameWidth == 0 && cfg.frameHeight == 0) {
             cfg = cfg.copy(
-                frameWidth = width,
-                frameHeight = height
+                frameWidth = width, frameHeight = height
             )
         }
         lastConfig = cfg
@@ -206,19 +196,15 @@ open class SVGAImageView @JvmOverloads constructor(
             }
             loadingSource = realUrl
             LogUtils.info(
-                TAG,
-                "view = ${hashCode()} load from url: $realUrl , last source: $lastSource"
+                TAG, "view = ${hashCode()} load from url: $realUrl , last source: $lastSource"
             )
             loadJob = parser?.decodeFromURL(
-                url,
-                config = cfg ?: SVGAConfig(frameWidth = width, frameHeight = height),
-                callback
+                url, config = cfg ?: SVGAConfig(frameWidth = width, frameHeight = height), callback
             )
         } else if (SourceUtil.isFilePath(realUrl)) {
             loadingSource = realUrl
             LogUtils.info(
-                TAG,
-                "view = ${hashCode()} load from file: $realUrl , last source: $lastSource"
+                TAG, "view = ${hashCode()} load from file: $realUrl , last source: $lastSource"
             )
             loadJob = parser?.decodeFromFile(
                 realUrl,
@@ -228,8 +214,7 @@ open class SVGAImageView @JvmOverloads constructor(
         } else {
             loadingSource = realUrl
             LogUtils.info(
-                TAG,
-                "view = ${hashCode()} load from assert: $realUrl , last source: $lastSource"
+                TAG, "view = ${hashCode()} load from assert: $realUrl , last source: $lastSource"
             )
             loadJob = parser?.decodeFromAssets(
                 realUrl,
@@ -274,32 +259,23 @@ open class SVGAImageView @JvmOverloads constructor(
         mEndFrame = (videoItem.frames - 1).coerceAtMost(
             ((range?.location ?: 0) + (range?.length ?: Int.MAX_VALUE) - 1)
         )
-        val animator = ValueAnimator.ofInt(mStartFrame, mEndFrame)
-        animator.interpolator = LinearInterpolator()
-        animator.duration =
-            ((mEndFrame - mStartFrame + 1) * (1000 / videoItem.FPS) / generateScale()).toLong()
-        animator.repeatCount = if (loops <= 0) ValueAnimator.INFINITE else loops - 1
-        if (mAnimatorUpdateListener.weakView.get() == null) {
-            mAnimatorUpdateListener.weakView = WeakReference(this)
-        }
-        animator.addUpdateListener(mAnimatorUpdateListener)
-        if (mAnimatorListener.weakView.get() == null) {
-            mAnimatorListener.weakView = WeakReference(this)
-        }
-        animator.addListener(mAnimatorListener)
-        LogUtils.info(
-            TAG, "================ start animation ================" +
-                    "\r\n view: ${hashCode()}" +
-                    "\r\n source: $lastSource" +
-                    "\r\n url: $loadingSource" +
-                    "\r\n svgaMemorySize: ${getSvgaMemorySizeFormat()}(${getSvgaMemorySize()} Bytes)"
+        //退化区间保护：长度为 0 的 SVGARange 会算出比首帧还小的 endFrame，
+        //旧实现 0 时长 animator 立即结束，这里钳到 startFrame 保证帧号始终合法
+        mEndFrame = mEndFrame.coerceAtLeast(mStartFrame)
+        //注册进全局共享时钟，由统一的 Choreographer 回调推进帧
+        tickerSession = SVGAAnimationTicker.start(
+            view = this,
+            startFrame = mStartFrame,
+            endFrame = mEndFrame,
+            fps = videoItem.FPS,
+            loops = loops,
+            reverse = reverse,
         )
-        if (reverse) {
-            animator.reverse()
-        } else {
-            animator.start()
-        }
-        mAnimator = animator
+        onAnimationStart(null)
+        LogUtils.info(
+            TAG,
+            "================ start animation ================" + "\r\n view: ${hashCode()}" + "\r\n source: $lastSource" + "\r\n url: $loadingSource" + "\r\n svgaMemorySize: ${getSvgaMemorySizeFormat()}(${getSvgaMemorySize()} Bytes)"
+        )
     }
 
     /**
@@ -331,46 +307,39 @@ open class SVGAImageView @JvmOverloads constructor(
         return drawable as? SVGADrawable
     }
 
-    private fun generateScale(): Double {
-        var scale = 1.0
-        try {
-            val animatorClass = Class.forName("android.animation.ValueAnimator") ?: return scale
-            val getMethod = animatorClass.getDeclaredMethod("getDurationScale") ?: return scale
-            scale = (getMethod.invoke(animatorClass) as Float).toDouble()
-            if (scale == 0.0) {
-                val setMethod =
-                    animatorClass.getDeclaredMethod("setDurationScale", Float::class.java)
-                        ?: return scale
-                setMethod.isAccessible = true
-                setMethod.invoke(animatorClass, 1.0f)
-                scale = 1.0
-                LogUtils.info(
-                    TAG,
-                    "The animation duration scale has been reset to" +
-                            " 1.0x, because you closed it on developer options."
-                )
-            }
-        } catch (ignore: Exception) {
-            ignore.printStackTrace()
-        }
-        return scale
+    /** 共享时钟每帧推进入口：无论可见与否都先推进帧，仅 onStep 回调受可见性约束 */
+    internal fun tickerAdvanceFrame(frame: Int) {
+        val drawable = getSVGADrawable() ?: return
+        drawable.currentFrame = frame
+        //没有 onStep 回调的动画（勋章等）无需做可见性判定，
+        //原先每帧 getGlobalVisibleRect 的分配 + native 调用对这类场景是纯浪费
+        val cb = callback ?: return
+        if (!isGlobalVisible()) return
+        val percentage = (frame + 1).toDouble() / drawable.videoItem.frames.toDouble()
+        cb.onStep(frame, percentage)
     }
 
-    private fun onAnimatorUpdate(animator: ValueAnimator?) {
-        val drawable = getSVGADrawable() ?: return
-        //无论可见与否，都先推进帧。仅在用户回调（onStep）时再判定可见性，
-        //避免“动画器在跑、但 currentFrame 被锁在初始值”导致用户视角下看似未播放
-        drawable.currentFrame = animator?.animatedValue as Int
-        if (!isVisible()) return
-        val percentage =
-            (drawable.currentFrame + 1).toDouble() / drawable.videoItem.frames.toDouble()
-        callback?.onStep(drawable.currentFrame, percentage)
+    /** 会话推进的前提：drawable 已被 clear/stop 时由对应路径摘除会话，这里双保险 */
+    internal fun tickerHasDrawable(): Boolean {
+        return getSVGADrawable() != null
+    }
+
+    //可见性矩形复用成员，避免每帧分配
+    private val globalVisibleRect = Rect()
+
+    private fun isGlobalVisible(): Boolean {
+        if (!getGlobalVisibleRect(globalVisibleRect)) return false
+        return globalVisibleRect.width() > 0 && globalVisibleRect.height() > 0
     }
 
     open fun onAnimationStart(animation: Animator?) {
         loadingSource = null
         isAnimating = true
         callback?.onStart()
+    }
+
+    open fun onAnimationRepeat(animation: Animator?) {
+        callback?.onRepeat()
     }
 
     open fun onAnimationCancel(animation: Animator?) {
@@ -405,11 +374,9 @@ open class SVGAImageView @JvmOverloads constructor(
     fun clear() {
         //clear 不保证伴随 stopAnimation（如列表不 detach 的 rebind、parserSource 预加载清理），
         //无限循环动画器需在此一并停掉，否则空转成僵尸直到下次成功播放才被回收。
-        //先摘监听器再 cancel：不派发 onAnimationCancel/onAnimationEnd，避免改变用户回调时序
-        mAnimator?.removeAllListeners()
-        mAnimator?.removeAllUpdateListeners()
-        mAnimator?.cancel()
-        mAnimator = null
+        //共享时钟模式下等价操作：摘除会话
+        SVGAAnimationTicker.stop(tickerSession)
+        tickerSession = null
         getSVGADrawable()?.cleared = true
         getSVGADrawable()?.clear()
         //清理动态添加的数据
@@ -441,16 +408,10 @@ open class SVGAImageView @JvmOverloads constructor(
         } else {
             if (isAnimating) {
                 //这里暂停动画不改变动画状态，用于恢复可见后恢复动画
-                mAnimator?.pause()
+                SVGAAnimationTicker.pause(tickerSession)
                 getSVGADrawable()?.pause()
             }
         }
-    }
-
-    private fun isVisible(): Boolean {
-        val visibleRect = Rect()
-        getGlobalVisibleRect(visibleRect)
-        return visibleRect.width() > 0 && visibleRect.height() > 0
     }
 
     /**
@@ -463,7 +424,7 @@ open class SVGAImageView @JvmOverloads constructor(
     }
 
     open fun pauseAnimation() {
-        mAnimator?.pause()
+        SVGAAnimationTicker.pause(tickerSession)
         getSVGADrawable()?.pause()
         callback?.onPause()
         isAnimating = false
@@ -472,10 +433,10 @@ open class SVGAImageView @JvmOverloads constructor(
     open fun resumeAnimation() {
         getSVGADrawable()?.resume()
         callback?.onResume()
-        if (mAnimator == null) {
+        if (tickerSession == null) {
             play(null, false)
         } else {
-            mAnimator?.resume()
+            SVGAAnimationTicker.resume(tickerSession)
         }
         isAnimating = true
     }
@@ -485,10 +446,8 @@ open class SVGAImageView @JvmOverloads constructor(
     }
 
     fun stopAnimation(clear: Boolean) {
-        mAnimator?.cancel()
-        mAnimator?.removeAllListeners()
-        mAnimator?.removeAllUpdateListeners()
-        mAnimator = null
+        SVGAAnimationTicker.stop(tickerSession)
+        tickerSession = null
         getSVGADrawable()?.stop()
         getSVGADrawable()?.cleared = clear
         if (clear) {
@@ -531,10 +490,9 @@ open class SVGAImageView @JvmOverloads constructor(
         drawable.currentFrame = frame
         if (andPlay) {
             startAnimation()
-            mAnimator?.let {
-                it.currentPlayTime = (0.0f.coerceAtLeast(
-                    1.0f.coerceAtMost((frame.toFloat() / drawable.videoItem.frames.toFloat()))
-                ) * it.duration).toLong()
+            //对齐原实现对 ValueAnimator.currentPlayTime 的设置：把播放头拨到指定帧
+            tickerSession?.let {
+                SVGAAnimationTicker.seekToFrame(it, frame, drawable.videoItem.frames)
             }
         }
     }
@@ -567,11 +525,7 @@ open class SVGAImageView @JvmOverloads constructor(
         val drawable = getSVGADrawable() ?: return super.onTouchEvent(event)
         drawable.dynamicItem?.mClickMap?.apply {
             for ((key, value) in this) {
-                if (event.x >= value[0]
-                    && event.x <= value[2]
-                    && event.y >= value[1]
-                    && event.y <= value[3]
-                ) {
+                if (event.x >= value[0] && event.x <= value[2] && event.y >= value[1] && event.y <= value[3]) {
                     mItemClickAreaListener?.let {
                         it.onClick(key)
                         return true
@@ -635,56 +589,4 @@ open class SVGAImageView @JvmOverloads constructor(
     fun getLastSource(): String? {
         return lastSource
     }
-
-    private class AnimatorListener(var weakView: WeakReference<SVGAImageView>) :
-        Animator.AnimatorListener {
-        override fun onAnimationRepeat(animation: Animator) {
-            val svgaImageView = weakView.get()
-            if (svgaImageView == null) {
-                animation.removeListener(this)
-            } else {
-                svgaImageView.callback?.onRepeat()
-            }
-        }
-
-        override fun onAnimationEnd(animation: Animator) {
-            val svgaImageView = weakView.get()
-            if (svgaImageView == null) {
-                animation.removeListener(this)
-            } else {
-                svgaImageView.onAnimationEnd(animation)
-            }
-        }
-
-        override fun onAnimationCancel(animation: Animator) {
-            val svgaImageView = weakView.get()
-            if (svgaImageView == null) {
-                animation.removeListener(this)
-            } else {
-                svgaImageView.onAnimationCancel(animation)
-            }
-        }
-
-        override fun onAnimationStart(animation: Animator) {
-            val svgaImageView = weakView.get()
-            if (svgaImageView == null) {
-                animation.removeListener(this)
-            } else {
-                svgaImageView.onAnimationStart(animation)
-            }
-        }
-    } // end of AnimatorListener
-
-
-    private class AnimatorUpdateListener(var weakView: WeakReference<SVGAImageView>) :
-        ValueAnimator.AnimatorUpdateListener {
-        override fun onAnimationUpdate(animation: ValueAnimator) {
-            val svgaImageView = weakView.get()
-            if (svgaImageView == null) {
-                animation.removeUpdateListener(this)
-            } else {
-                svgaImageView.onAnimatorUpdate(animation)
-            }
-        }
-    } // end of AnimatorUpdateListener
 }
