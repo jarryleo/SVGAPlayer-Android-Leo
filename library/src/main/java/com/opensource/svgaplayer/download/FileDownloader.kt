@@ -7,6 +7,7 @@ import com.opensource.svgaplayer.utils.log.LogUtils
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.isActive
+import java.io.File
 import java.io.FileOutputStream
 import java.io.InputStream
 import java.net.HttpURLConnection
@@ -34,6 +35,10 @@ open class FileDownloader {
             //下载到缓存地址
             val cacheKey = SVGAFileCache.buildCacheKey(url)
             val cacheFile = SVGAFileCache.buildCacheFile(cacheKey)
+            //先写临时文件，完整下载后再发布：getCachedType 只判存在性，下载中的半成品一旦以正式
+            //名字落盘，并发的解读者会把它当完整缓存解析失败并误删；取消/失败也只清临时文件
+            val tmpFile =
+                File("${cacheFile.absolutePath}.tmp_${System.nanoTime()}_${Thread.currentThread().id}")
             try {
                 LogUtils.info(
                     TAG, "================ file download start ================ " +
@@ -53,10 +58,7 @@ open class FileDownloader {
                     it.requestMethod = "GET"
                     it.setRequestProperty("Connection", "close")
                     it.connect()
-                    if (!cacheFile.exists()) {
-                        cacheFile.createNewFile()
-                    }
-                    FileOutputStream(cacheFile).use { output ->
+                    FileOutputStream(tmpFile).use { output ->
                         it.inputStream.use { inputStream ->
                             val buffer = ByteArray(SIZE)
                             var count: Int
@@ -73,17 +75,25 @@ open class FileDownloader {
                         LogUtils.info(
                             TAG, "================ file download success ================"
                         )
+                        if (cacheFile.exists()) {
+                            cacheFile.delete()
+                        }
+                        if (!tmpFile.renameTo(cacheFile)) {
+                            //rename 失败（目标被并发占用等）时退化为拷贝发布
+                            tmpFile.copyTo(cacheFile, overwrite = true)
+                            tmpFile.delete()
+                        }
                         complete(cacheFile.inputStream())
                     } else {
                         LogUtils.info(
                             TAG, "================ file download cancel ================"
                         )
-                        cacheFile.delete()
+                        tmpFile.delete()
                         failure(CancellationException("download cancel"))
                     }
                 }
             } catch (e: Exception) {
-                cacheFile.delete()
+                tmpFile.delete()
                 LogUtils.error(TAG, "================ file download fail ================")
                 LogUtils.error(TAG, "error: ${e.message}")
                 e.printStackTrace()

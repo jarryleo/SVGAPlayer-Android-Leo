@@ -159,7 +159,7 @@ class SVGADynamicEntity(val context: Context) {
                     val realUrl =
                         UrlDecoderManager.getUrlDecoder().decodeImageUrl(url, width, height)
                     bitmap = if (SourceUtil.isUrl(realUrl)) {
-                        SVGAManager.downloadBitmap(context, realUrl, width, height)
+                        BitmapDownloader.downloadBitmap(realUrl, width, height)
                     } else if (SourceUtil.isFilePath(realUrl)) {
                         SVGABitmapFileDecoder.decodeBitmapFrom(realUrl, width, height)
                     } else {
@@ -217,7 +217,7 @@ class SVGADynamicEntity(val context: Context) {
         dynamicTextScale[forKey] = textEntity.scale
         val text = textEntity.text
         val width = if (textEntity.ellipsize == TextUtils.TruncateAt.MARQUEE) {
-            textPaint.measureText(text).roundToIntSafe()
+            textPaint.measureText(text, 0, text.length).roundToIntSafe()
         } else {
             Int.MAX_VALUE
         }

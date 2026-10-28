@@ -22,6 +22,7 @@ import org.json.JSONObject
 import java.io.File
 import java.io.FileInputStream
 import java.io.FileOutputStream
+import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicReference
 
 /**
@@ -64,8 +65,35 @@ class SVGAVideoEntity {
     //加载完成回调
     private var mCallback: AtomicReference<PrepareCallback?> = AtomicReference(null)
 
+    /** 音频装配完成标记：置位后再次 prepare（内存缓存命中复用同一实体）直接回调，不重复装配 */
+    @Volatile
+    private var audioPrepared = false
+
     /** 内存缓存Key */
     private var mMemoryCacheKey: String? = null
+
+    /** view 绑定计数：>0 表示仍被某个 view 的 drawable 持有，内存缓存驱逐/替换时必须跳过释放 */
+    private val refCount = AtomicInteger(0)
+
+    /**
+     * 绑定/释放状态锁：串行化 acquireIfUsable 的"可用检查 + 计数 +1"与
+     * markReleasedIfUnused 的"无绑定判定 + 标记释放"。不加锁时存在竞态：
+     * 驱逐线程判定 refCount==0 决定回收的瞬间，主线程恰好 acquire 并绑定，
+     * 回收落在展示中的 drawable 上，下一帧绘制已回收 bitmap 崩溃
+     */
+    private val lifecycleLock = Any()
+
+    /** bitmap 已释放标记：clear() 后置位，防止已回收实体被再次绑定或写回缓存 */
+    @Volatile
+    internal var isReleased = false
+        private set
+
+    /**
+     * 图片解码不完整（构造期异常/OOM 被吞）标记：实体仍可播放，但 imageMap 残缺、
+     * 字节记账失真，不应进入内存缓存被复用
+     */
+    internal var isDecodeIncomplete = false
+        private set
 
     constructor(json: JSONObject, cacheDir: File) : this(json, cacheDir, 0, 0, null)
 
@@ -86,8 +114,10 @@ class SVGAVideoEntity {
             parserImages(json)
         } catch (e: Exception) {
             e.printStackTrace()
+            isDecodeIncomplete = true
         } catch (e: OutOfMemoryError) {
             e.printStackTrace()
+            isDecodeIncomplete = true
         }
         resetSprites(json)
     }
@@ -121,8 +151,10 @@ class SVGAVideoEntity {
             parserImages(entity)
         } catch (e: Exception) {
             e.printStackTrace()
+            isDecodeIncomplete = true
         } catch (e: OutOfMemoryError) {
             e.printStackTrace()
+            isDecodeIncomplete = true
         }
         resetSprites(entity)
     }
@@ -141,6 +173,12 @@ class SVGAVideoEntity {
     }
 
     internal fun prepare(callback: () -> Unit, playCallback: SVGAParser.PlayCallback?) {
+        //已装配过（内存缓存命中复用同一实体）：直接回调。重复 setupAudios 会新建 SoundPool
+        //覆盖旧的（旧实例未 release，native 资源延迟释放），且带音频动画每次命中都要重等 3 秒兜底
+        if (audioPrepared) {
+            callback.invoke()
+            return
+        }
         //判断空位与注册必须原子：并发命中内存缓存时，两个调用交错 get/set 会互相覆盖回调，
         //被覆盖的一方永远收不到完成通知（列表批量加载同一动画时表现为个别不播放）
         if (!mCallback.compareAndSet(null, callback)) {
@@ -152,10 +190,17 @@ class SVGAVideoEntity {
         val item = movieItem
         if (item == null) {
             LogUtils.debug(TAG, "movieItem = null")
+            //标记须在消费回调前置位：否则窗口内并发的 prepare 会经 CAS 成功再次装配
+            audioPrepared = true
             prepareLoadSuccessCallback()
         } else {
             SvgaCoroutineManager.launchIo(childJob = job) {
                 setupAudios(item) {
+                    audioPrepared = true
+                    //音频装配是 movieItem 的最后一个消费方，用完即丢源实体：
+                    //movieItem.images 持有整个 SVGA 的压缩图片/音频字节（可能上百 MB），
+                    //实体入内存缓存后保留它等于在 bitmap 记账之外无上限驻留源文件数据
+                    movieItem = null
                     prepareLoadSuccessCallback()
                 }
             }
@@ -167,12 +212,19 @@ class SVGAVideoEntity {
         imgJson.keys().forEach { imgKey ->
             val filePath = generateBitmapFilePath(imgJson[imgKey].toString(), imgKey)
             if (filePath.isEmpty()) {
-                return
+                //引用的图片文件缺失（解压未完成/目录残缺）：不能就此中止全部图片解析
+                //（原实现的裸 return 会让首个缺图连带其余图片都不解析），
+                //并标记解码不完整，阻止 imageMap 残缺的实体作为成功结果进入内存缓存被长期复用
+                isDecodeIncomplete = true
+                return@forEach
             }
             val bitmapKey = imgKey.replace(".matte", "")
             val bitmap = createBitmap(filePath)
             if (bitmap != null) {
                 imageMap[bitmapKey] = bitmap
+            } else {
+                //文件存在但解码失败（含解码器吞掉的异常/OOM）：同样按残缺处理，禁止入缓存复用
+                isDecodeIncomplete = true
             }
         }
     }
@@ -380,6 +432,7 @@ class SVGAVideoEntity {
 
     fun clear() {
         LogUtils.debug(TAG, "clear size = ${getMemorySize()}")
+        isReleased = true
         job.cancel()
         soundPool?.release()
         soundPool = null
@@ -395,6 +448,38 @@ class SVGAVideoEntity {
         }
         imageMap.clear()
         mCallback.set(null)
+        movieItem = null
+    }
+
+    /**
+     * view 绑定本实体时调用（setVideoItem）："可用性检查 + 引用计数 +1"原子完成。
+     * @return false：实体已释放（bitmap 已回收），不可绑定，调用方应放弃展示
+     */
+    internal fun acquireIfUsable(): Boolean {
+        synchronized(lifecycleLock) {
+            if (isReleased) return false
+            refCount.incrementAndGet()
+            return true
+        }
+    }
+
+    /**
+     * view 归还本实体时调用（clear）。
+     * @return true：本次为末次释放，实体已无任何 view 持有，由调用方决定回收或归还缓存
+     */
+    internal fun release(): Boolean = refCount.decrementAndGet() <= 0
+
+    /**
+     * 驱逐路径专用："无 view 绑定判定 + isReleased 标记"原子完成，与 [acquireIfUsable] 互斥。
+     * 标记成功后迟到的 acquireIfUsable 会因 isReleased 而失败，不再绑定到即将回收的实体上。
+     * @return true：实体无绑定且未释放，调用方可安全执行 clear() 回收 bitmap
+     */
+    internal fun markReleasedIfUnused(): Boolean {
+        synchronized(lifecycleLock) {
+            if (isReleased || refCount.get() > 0) return false
+            isReleased = true
+            return true
+        }
     }
 
     fun getMemoryCacheKey(): String? {
@@ -405,9 +490,15 @@ class SVGAVideoEntity {
      * 获取svga主帧占用内存大小
      */
     fun getMemorySize(): Long {
-        return imageMap.values.sumOf {
-            it.width * it.height * 4
-        }.toLong()
+        //解码 bitmap：allocationByteCount 为解码后的真实字节数（RGB_565 每像素 2 字节），
+        //原 width*height*4 按 ARGB_8888 计算高估一倍
+        val bitmapBytes = imageMap.values.sumOf { bitmap ->
+            runCatching { bitmap.allocationByteCount.toLong() }.getOrDefault(0L)
+        }
+        //proto 源压缩字节：音频装配完成后会被丢弃（置 null），此口径仅覆盖装配完成前的
+        //在途窗口，防止超预算判定与缓存记账漏算这段时间内的真实占用
+        val sourceBytes = movieItem?.images?.values?.sumOf { it.size.toLong() } ?: 0L
+        return bitmapBytes + sourceBytes
     }
 }
 

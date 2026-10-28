@@ -10,6 +10,7 @@ import android.util.AttributeSet
 import android.view.MotionEvent
 import android.view.View
 import android.widget.ImageView
+import com.opensource.svgaplayer.cache.SVGAMemoryCache
 import com.opensource.svgaplayer.url.UrlDecoderManager
 import com.opensource.svgaplayer.utils.SVGARange
 import com.opensource.svgaplayer.utils.SourceUtil
@@ -18,6 +19,8 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.MainScope
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.lang.ref.WeakReference
@@ -30,7 +33,9 @@ import java.net.URLDecoder
  */
 @SuppressLint("ObsoleteSdkInt", "UNUSED")
 open class SVGAImageView @JvmOverloads constructor(
-    context: Context, attrs: AttributeSet? = null, defStyleAttr: Int = 0
+    context: Context,
+    attrs: AttributeSet? = null,
+    defStyleAttr: Int = 0
 ) : ImageView(context, attrs, defStyleAttr), CoroutineScope by MainScope() {
 
     private val TAG = "SVGAImageView"
@@ -47,7 +52,8 @@ open class SVGAImageView @JvmOverloads constructor(
     var loops = 0
 
     @Deprecated(
-        "It is recommended to use clearAfterDetached, or manually call to SVGAVideoEntity#clear." + "If you just consider cleaning up the canvas after playing, you can use FillMode#Clear.",
+        "It is recommended to use clearAfterDetached, or manually call to SVGAVideoEntity#clear." +
+                "If you just consider cleaning up the canvas after playing, you can use FillMode#Clear.",
         level = DeprecationLevel.WARNING
     )
     var clearsAfterStop = false
@@ -69,6 +75,14 @@ open class SVGAImageView @JvmOverloads constructor(
 
     private var lastSource: String? = null
 
+    /**
+     * 重新加载期间是否保留当前的非 SVGA 占位 drawable（静态图）：
+     * parserSource 加载前的预清理只清动画状态与在途任务，静态占位留待新实体
+     * 到达后被 setImageDrawable 原地替换。用于"滑动时静态图、停止后切 SVGA"
+     * 的列表场景，避免先清空占位导致的闪空白。SVGADrawable 不受此开关影响。
+     */
+    private var keepPlaceholderOnReload = false
+
     //IO 线程(parserSource)写、主线程(回调校验/动画启动)读，需保证可见性
     @Volatile
     internal var loadingSource: String? = null
@@ -76,6 +90,19 @@ open class SVGAImageView @JvmOverloads constructor(
     private var loadJob: Job? = null
     private var dynamicBlock: (SVGADynamicEntity.() -> Unit)? = null
     internal var onError: ((SVGAImageView) -> Unit)? = {}
+
+    /**
+     * 内部加载协程作用域：attach 重建、detach 取消（区别于对外暴露的 CoroutineScope 委托，后者保持原行为不变）。
+     * 旧实现加载协程挂在永不取消的 view 作用域上：detach 后在途 parserSource 会继续执行，
+     * 重装 loadCallback 发起"复活解码"，完成的实体经 startAnimation 的 post 挂在已 detach 的 view 上
+     * （RecyclerView 池延长持有时间），造成 bitmap 无法释放。
+     * detach 后发起的 load 因作用域已取消而被丢弃，由 attach 后的
+     * stepToFrame/onLayout 兜底重新加载（lastSource/lastConfig 已在 load 中记录）。
+     */
+    private var loadScope: CoroutineScope = MainScope()
+
+    /** 加载回调有效性：加载作用域未被取消（view 未 detach）。detach 后旧窗口周期的加载一律失效 */
+    internal fun isLoadScopeActive(): Boolean = loadScope.isActive
 
     init {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.JELLY_BEAN_MR2) {
@@ -121,11 +148,13 @@ open class SVGAImageView @JvmOverloads constructor(
         source: String?,
         config: SVGAConfig? = null,
         onError: ((SVGAImageView) -> Unit)? = null,
+        keepPlaceholderOnReload: Boolean = false,
         dynamicBlock: (SVGADynamicEntity.() -> Unit)? = null
     ): SVGAImageView {
         this.visibility = View.VISIBLE
         this.dynamicBlock = dynamicBlock
         this.onError = onError
+        this.keepPlaceholderOnReload = keepPlaceholderOnReload
         if (isReplayDrawable(source)) {
             return this
         }
@@ -138,7 +167,10 @@ open class SVGAImageView @JvmOverloads constructor(
         }
         //已有宽高才加载动画
         if ((width > 0 && height > 0) || config?.isOriginal == true) {
-            launch(Dispatchers.IO) {
+            //与 onLayout/stepToFrame 的触发一样打时间戳：否则 load 后紧随的布局变化会再次触发
+            //parserSource，与本次加载在 IO 线程交错形成同 view 双重加载
+            markParserSourceTriggered()
+            loadScope.launch(Dispatchers.IO) {
                 parserSource(source, config)
             }
         } else {
@@ -155,7 +187,8 @@ open class SVGAImageView @JvmOverloads constructor(
         var cfg = config
         if (cfg != null && !cfg.isOriginal && cfg.frameWidth == 0 && cfg.frameHeight == 0) {
             cfg = cfg.copy(
-                frameWidth = width, frameHeight = height
+                frameWidth = width,
+                frameHeight = height
             )
         }
         lastConfig = cfg
@@ -167,17 +200,20 @@ open class SVGAImageView @JvmOverloads constructor(
             LogUtils.info(TAG, "view = ${hashCode()} same source is loading, skip: $realUrl")
             return
         }
-        //清理旧动画与旧回调（clear 内部会取消 loadCallback）
-        withContext(Dispatchers.Main) {
-            clear()
-        }
         var parser = SVGAParser.shareParser()
         if (parser == null) {
             SVGAParser.init(context.applicationContext)
             parser = SVGAParser.shareParser()
         }
         val callback = SVGAViewLoadCallback(realUrl, WeakReference(this))
-        this.loadCallback = callback
+        //清理、安装回调、标记来源必须在主线程原子完成：此前 clear 与安装之间有交错窗口，
+        //并发 parserSource 会让旧回调逃逸取消、与新回调同时待决，完成投递双双到达时，
+        //后者撞上前者触发的 onAnimationStart（loadingSource 已置 null）被整批丢弃
+        withContext(Dispatchers.Main) {
+            clear(keepPlaceholder = keepPlaceholderOnReload)
+            this@SVGAImageView.loadCallback = callback
+            loadingSource = realUrl
+        }
         if (SourceUtil.isUrl(realUrl)) {
             val decode = try {
                 withContext(Dispatchers.IO) {
@@ -194,17 +230,19 @@ open class SVGAImageView @JvmOverloads constructor(
                 onError?.invoke(this)
                 return
             }
-            loadingSource = realUrl
             LogUtils.info(
-                TAG, "view = ${hashCode()} load from url: $realUrl , last source: $lastSource"
+                TAG,
+                "view = ${hashCode()} load from url: $realUrl , last source: $lastSource"
             )
             loadJob = parser?.decodeFromURL(
-                url, config = cfg ?: SVGAConfig(frameWidth = width, frameHeight = height), callback
+                url,
+                config = cfg ?: SVGAConfig(frameWidth = width, frameHeight = height),
+                callback
             )
         } else if (SourceUtil.isFilePath(realUrl)) {
-            loadingSource = realUrl
             LogUtils.info(
-                TAG, "view = ${hashCode()} load from file: $realUrl , last source: $lastSource"
+                TAG,
+                "view = ${hashCode()} load from file: $realUrl , last source: $lastSource"
             )
             loadJob = parser?.decodeFromFile(
                 realUrl,
@@ -212,9 +250,9 @@ open class SVGAImageView @JvmOverloads constructor(
                 callback
             )
         } else {
-            loadingSource = realUrl
             LogUtils.info(
-                TAG, "view = ${hashCode()} load from assert: $realUrl , last source: $lastSource"
+                TAG,
+                "view = ${hashCode()} load from assert: $realUrl , last source: $lastSource"
             )
             loadJob = parser?.decodeFromAssets(
                 realUrl,
@@ -226,11 +264,19 @@ open class SVGAImageView @JvmOverloads constructor(
 
 
     fun startAnimation(videoItem: SVGAVideoEntity) {
+        startAnimation(videoItem, preAcquired = false)
+    }
+
+    /**
+     * @param preAcquired 调用方已完成 [SVGAVideoEntity.acquireIfUsable] 预占（完成回调投递路径），
+     *        跳过二次计数，避免与投递窗口内的缓存驱逐竞态
+     */
+    internal fun startAnimation(videoItem: SVGAVideoEntity, preAcquired: Boolean) {
         post {
             stopAnimation()
             videoItem.antiAlias = mAntiAlias
             val dynamicItem = SVGADynamicEntity(context)
-            setVideoItem(videoItem, dynamicItem)
+            setVideoItemInternal(videoItem, dynamicItem, preAcquired)
             dynamicBlock?.let { dynamicItem.it() }
             getSVGADrawable()?.scaleType = scaleType
             if (mAutoPlay) {
@@ -272,10 +318,36 @@ open class SVGAImageView @JvmOverloads constructor(
             reverse = reverse,
         )
         onAnimationStart(null)
-        LogUtils.info(
-            TAG,
-            "================ start animation ================" + "\r\n view: ${hashCode()}" + "\r\n source: $lastSource" + "\r\n url: $loadingSource" + "\r\n svgaMemorySize: ${getSvgaMemorySizeFormat()}(${getSvgaMemorySize()} Bytes)"
-        )
+        val svgaMemorySize = getSvgaMemorySize()
+        if (svgaMemorySize >= 30 * 1024 * 1024L) {
+            // svga 动画大于30M 则红色提醒
+            LogUtils.error(
+                TAG, "================ start animation ================" +
+                        "\r\n view: ${hashCode()}" +
+                        "\r\n source: $lastSource" +
+                        "\r\n url: $loadingSource" +
+                        "\r\n svgaMemorySize: ${getSvgaMemorySizeFormat()}($svgaMemorySize Bytes)"
+            )
+        } else if (svgaMemorySize >= 10 * 1024 * 1024L) {
+            // svga 动画大于10M 则黄色提醒
+            LogUtils.warn(
+                TAG, "================ start animation ================" +
+                        "\r\n view: ${hashCode()}" +
+                        "\r\n source: $lastSource" +
+                        "\r\n url: $loadingSource" +
+                        "\r\n svgaMemorySize: ${getSvgaMemorySizeFormat()}($svgaMemorySize Bytes)"
+            )
+        } else {
+            //正常日志
+            LogUtils.info(
+                TAG, "================ start animation ================" +
+                        "\r\n view: ${hashCode()}" +
+                        "\r\n source: $lastSource" +
+                        "\r\n url: $loadingSource" +
+                        "\r\n svgaMemorySize: ${getSvgaMemorySizeFormat()}($svgaMemorySize Bytes)"
+            )
+        }
+
     }
 
     /**
@@ -315,7 +387,8 @@ open class SVGAImageView @JvmOverloads constructor(
         //原先每帧 getGlobalVisibleRect 的分配 + native 调用对这类场景是纯浪费
         val cb = callback ?: return
         if (!isGlobalVisible()) return
-        val percentage = (frame + 1).toDouble() / drawable.videoItem.frames.toDouble()
+        val percentage =
+            (frame + 1).toDouble() / drawable.videoItem.frames.toDouble()
         cb.onStep(frame, percentage)
     }
 
@@ -372,17 +445,32 @@ open class SVGAImageView @JvmOverloads constructor(
     }
 
     fun clear() {
+        clear(keepPlaceholder = false)
+    }
+
+    /**
+     * @param keepPlaceholder 当前 drawable 是静态占位图（非 SVGADrawable）时保留，
+     *        待新加载的实体经 startAnimation 替换；SVGADrawable 无论开关与否照常清理
+     */
+    fun clear(keepPlaceholder: Boolean) {
         //clear 不保证伴随 stopAnimation（如列表不 detach 的 rebind、parserSource 预加载清理），
         //无限循环动画器需在此一并停掉，否则空转成僵尸直到下次成功播放才被回收。
         //共享时钟模式下等价操作：摘除会话
         SVGAAnimationTicker.stop(tickerSession)
         tickerSession = null
-        getSVGADrawable()?.cleared = true
-        getSVGADrawable()?.clear()
+        //先取引用：setImageDrawable(null) 之后 getSVGADrawable() 返回 null
+        val currentDrawable = getSVGADrawable()
+        val currentVideoItem = currentDrawable?.videoItem
+        currentDrawable?.cleared = true
+        currentDrawable?.clear()
         //清理动态添加的数据
-        getSVGADrawable()?.dynamicItem?.clearDynamicObjects()
-        // 清除对 drawable 的引用
-        setImageDrawable(null)
+        currentDrawable?.dynamicItem?.clearDynamicObjects()
+        // 清除对 drawable 的引用；仅保留静态占位图（加载中的占位由新实体到达时替换）
+        if (!(keepPlaceholder && currentDrawable == null)) {
+            setImageDrawable(null)
+        }
+        //归还实体绑定：末次释放者决定去向（无 key 立即回收 / 有 key 归还强字节缓存）
+        currentVideoItem?.let(::releaseVideoItem)
         if (loadJob?.isActive == true) loadJob?.cancel()
         loadJob = null
         //挂起的加载回调一并失效，保证 clear 后可以重新加载
@@ -461,15 +549,47 @@ open class SVGAImageView @JvmOverloads constructor(
     }
 
     fun setVideoItem(videoItem: SVGAVideoEntity?, dynamicItem: SVGADynamicEntity?) {
-        if (videoItem == null) {
+        setVideoItemInternal(videoItem, dynamicItem, preAcquired = false)
+    }
+
+    internal fun setVideoItemInternal(
+        videoItem: SVGAVideoEntity?,
+        dynamicItem: SVGADynamicEntity?,
+        preAcquired: Boolean
+    ) {
+        //先归还当前实体的绑定，保证引用计数与 view 的实际持有关系一致
+        getSVGADrawable()?.videoItem?.let(::releaseVideoItem)
+        //"可用检查 + acquire"原子完成：已被释放（bitmap 已回收）的实体不可再绑定，
+        //同时杜绝与驱逐路径"判定无绑定 → 标记回收"的交错（见 SVGAVideoEntity.acquireIfUsable）
+        if (videoItem == null || !(preAcquired || videoItem.acquireIfUsable())) {
+            LogUtils.info(
+                TAG,
+                "setVideoItem drop: entity released before bind, source = $lastSource"
+            )
             setImageDrawable(null)
+            return
+        }
+        val drawable = SVGADrawable(videoItem, dynamicItem)
+        dynamicItem?.invalidateCallback = {
+            postInvalidate()
+        }
+        drawable.cleared = true
+        setImageDrawable(drawable)
+    }
+
+    /**
+     * 归还实体绑定（引用计数 -1）。
+     * 末次释放者决定实体去向：无内存缓存 key 的立即回收（历史行为）；
+     * 有 key 的归还强字节缓存复用（put-if-absent，缓存已有更新的在途实体时不覆盖），
+     * 由 [SVGAMemoryCache] 超限驱逐时统一释放。
+     */
+    private fun releaseVideoItem(videoItem: SVGAVideoEntity) {
+        if (!videoItem.release()) return
+        val cacheKey = videoItem.getMemoryCacheKey()
+        if (cacheKey.isNullOrEmpty()) {
+            videoItem.clear()
         } else {
-            val drawable = SVGADrawable(videoItem, dynamicItem)
-            dynamicItem?.invalidateCallback = {
-                postInvalidate()
-            }
-            drawable.cleared = true
-            setImageDrawable(drawable)
+            SVGAMemoryCache.INSTANCE.returnToCache(cacheKey, videoItem)
         }
     }
 
@@ -480,7 +600,7 @@ open class SVGAImageView @JvmOverloads constructor(
             if (width > 0 && height > 0) {
                 lastSource?.let {
                     markParserSourceTriggered()
-                    launch(Dispatchers.IO) {
+                    loadScope.launch(Dispatchers.IO) {
                         parserSource(it, lastConfig)
                     }
                 }
@@ -525,7 +645,11 @@ open class SVGAImageView @JvmOverloads constructor(
         val drawable = getSVGADrawable() ?: return super.onTouchEvent(event)
         drawable.dynamicItem?.mClickMap?.apply {
             for ((key, value) in this) {
-                if (event.x >= value[0] && event.x <= value[2] && event.y >= value[1] && event.y <= value[3]) {
+                if (event.x >= value[0]
+                    && event.x <= value[2]
+                    && event.y >= value[1]
+                    && event.y <= value[3]
+                ) {
                     mItemClickAreaListener?.let {
                         it.onClick(key)
                         return true
@@ -538,11 +662,16 @@ open class SVGAImageView @JvmOverloads constructor(
 
     override fun onAttachedToWindow() {
         super.onAttachedToWindow()
+        //重建被上一次 detach 取消的加载作用域，保证本窗口周期内的加载协程可用
+        loadScope = MainScope()
         stepToFrame(0, lastConfig?.autoPlay ?: mAutoPlay)
     }
 
     override fun onDetachedFromWindow() {
         super.onDetachedFromWindow()
+        //先取消加载作用域再清理：在途 parserSource 在下一个挂起点（withContext(Main){clear()}）终止，
+        //已排队但未执行的 clear 块也会被取消，杜绝 detach 后重装 loadCallback 的"复活解码"
+        loadScope.cancel()
         stopAnimation(clearsAfterDetached)
         if (clearsAfterDetached) {
             clear()
@@ -559,7 +688,7 @@ open class SVGAImageView @JvmOverloads constructor(
             && android.os.SystemClock.uptimeMillis() - lastParserSourceTriggerAt > 100
         ) {
             markParserSourceTriggered()
-            launch(Dispatchers.IO) {
+            loadScope.launch(Dispatchers.IO) {
                 parserSource(lastSource, lastConfig)
             }
         }

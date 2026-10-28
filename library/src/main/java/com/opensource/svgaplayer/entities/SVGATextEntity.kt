@@ -11,7 +11,7 @@ import android.text.TextUtils
  * Description : SVGA文本配置
  */
 data class SVGATextEntity(
-    var text: String = "",
+    var text: CharSequence = "",
     var textSize: Float = 20f,
     var scale: Float = 0.9f,
     var textColor: Int = Color.WHITE,

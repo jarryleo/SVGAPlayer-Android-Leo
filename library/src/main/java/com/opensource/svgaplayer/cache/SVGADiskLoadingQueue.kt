@@ -3,8 +3,6 @@ package com.opensource.svgaplayer.cache
 import com.opensource.svgaplayer.SVGAConfig
 import com.opensource.svgaplayer.SVGAParser.ParseCompletion
 import com.opensource.svgaplayer.SVGAParser.PlayCallback
-import com.opensource.svgaplayer.cache.SVGADiskLoadingQueue.joinOrStart
-import com.opensource.svgaplayer.cache.SVGADiskLoadingQueue.registerJob
 import kotlinx.coroutines.CompletableJob
 import kotlinx.coroutines.Job
 import kotlin.coroutines.cancellation.CancellationException
@@ -28,6 +26,9 @@ object SVGADiskLoadingQueue {
         val callback: ParseCompletion?,
         val playCallback: PlayCallback?,
         val config: SVGAConfig,
+        /** 等待者自己的内存缓存 key：等待者可能是某内存尺寸的首个加载者（isCacheToMemory=true
+         *  且缓存未命中），占位登记在 [SVGAMemoryLoadingQueue]，磁盘队列通知时必须一并消费 */
+        val memoryCacheKey: String?,
         val proxyJob: CompletableJob
     )
 
@@ -50,13 +51,14 @@ object SVGADiskLoadingQueue {
         cacheKey: String,
         callback: ParseCompletion?,
         playCallback: PlayCallback?,
-        config: SVGAConfig
+        config: SVGAConfig,
+        memoryCacheKey: String? = null
     ): Pair<Boolean, Job?> =
         synchronized(SVGAMemoryLoadingQueue.lock) {
             val existingJob = inFlightJobs[cacheKey]
             if (existingJob != null && existingJob.isActive) {
                 val proxyJob = Job()
-                val item = SVGADiskLoadingItem(callback, playCallback, config, proxyJob)
+                val item = SVGADiskLoadingItem(callback, playCallback, config, memoryCacheKey, proxyJob)
                 loadingMap.getOrPut(cacheKey) { mutableListOf() }.add(item)
                 //等待者主动取消（view 回收）：仅从队列摘除自己，真实下载与加载者不受影响；
                 //正常完成路径由 completeAndTake/cancelAndTakeWaiters 统一 complete 代理 Job，不会走到这里

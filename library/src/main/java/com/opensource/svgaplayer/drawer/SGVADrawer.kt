@@ -18,6 +18,12 @@ internal open class SGVADrawer(val videoItem: SVGAVideoEntity) {
 
     private val spritePool = Pools.SimplePool<SVGADrawerSprite>(max(1, videoItem.spriteList.size))
 
+    /**
+     * 每帧复用的 sprite 列表，避免逐帧分配 ArrayList。
+     * 返回的是内部复用实例，调用方须在下一次 requestFrameSprites 前消费完毕（drawFrame 内同步用完）
+     */
+    private val frameSprites = ArrayList<SVGADrawerSprite>(max(1, videoItem.spriteList.size))
+
     inner class SVGADrawerSprite(
         var _matteKey: String? = null,
         var _imageKey: String? = null,
@@ -29,22 +35,22 @@ internal open class SGVADrawer(val videoItem: SVGAVideoEntity) {
     }
 
     internal fun requestFrameSprites(frameIndex: Int): List<SVGADrawerSprite> {
-        return videoItem.spriteList.mapNotNull { sprite ->
-            val frames = sprite.frames ?: emptyList()
-            if (frameIndex >= 0 && frameIndex < frames.size) {
-                sprite.imageKey?.let { imageKey ->
-                    if (!imageKey.endsWith(".matte") && frames[frameIndex].alpha <= 0.0) {
-                        return@mapNotNull null
-                    }
-                    return@mapNotNull (spritePool.acquire() ?: SVGADrawerSprite()).apply {
-                        _matteKey = sprite.matteKey
-                        _imageKey = sprite.imageKey
-                        _frameEntity = frames[frameIndex]
-                    }
-                }
-            }
-            return@mapNotNull null
+        val sprites = frameSprites
+        sprites.clear()
+        val spriteList = videoItem.spriteList
+        for (index in spriteList.indices) {
+            val sprite = spriteList[index]
+            val frames = sprite.frames ?: continue
+            if (frameIndex < 0 || frameIndex >= frames.size) continue
+            val imageKey = sprite.imageKey ?: continue
+            if (!imageKey.endsWith(".matte") && frames[frameIndex].alpha <= 0.0) continue
+            val drawerSprite = spritePool.acquire() ?: SVGADrawerSprite()
+            drawerSprite._matteKey = sprite.matteKey
+            drawerSprite._imageKey = sprite.imageKey
+            drawerSprite._frameEntity = frames[frameIndex]
+            sprites.add(drawerSprite)
         }
+        return sprites
     }
 
     internal fun releaseFrameSprites(sprites: List<SVGADrawerSprite>) {

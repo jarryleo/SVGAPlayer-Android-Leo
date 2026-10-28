@@ -25,6 +25,7 @@ public class AnimationWithDynamicImageActivity extends Activity {
         animationView.load("https://github.com/yyued/SVGA-Samples/blob/master/kingset.svga?raw=true",
                 null,
                 null,
+                false,
                 svgaDynamicEntity -> {
                     svgaDynamicEntity.setDynamicImage(
                             "https://github.com/PonyCui/resources/blob/master/svga_replace_avatar.png?raw=true",

@@ -37,7 +37,7 @@ public class AnimationFromClickActivity extends Activity {
     }
 
     private void loadAnimation() {
-        animationView.load("MerryChristmas.svga", null, null,
+        animationView.load("MerryChristmas.svga", null, null, false,
                 svgaDynamicEntity -> {
                     svgaDynamicEntity.setClickArea("img_10");
                     return null;

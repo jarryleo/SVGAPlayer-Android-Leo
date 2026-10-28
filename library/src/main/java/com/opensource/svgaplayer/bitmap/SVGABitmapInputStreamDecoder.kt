@@ -13,9 +13,7 @@ internal object SVGABitmapInputStreamDecoder : SVGABitmapDecoder<InputStream>() 
 
     override fun onDecode(data: InputStream, ops: BitmapFactory.Options): Bitmap? {
         return kotlin.runCatching {
-            data.use {
-                BitmapFactory.decodeStream(it, null, ops)
-            }
+            BitmapFactory.decodeStream(data, null, ops)
         }.getOrNull()
     }
 }

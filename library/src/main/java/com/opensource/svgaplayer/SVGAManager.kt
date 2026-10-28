@@ -1,13 +1,10 @@
 package com.opensource.svgaplayer
 
 import android.content.Context
-import android.graphics.Bitmap
 import android.net.http.HttpResponseCache
 import com.opensource.svgaplayer.cache.SVGABitmapCache
 import com.opensource.svgaplayer.cache.SVGAFileCache
 import com.opensource.svgaplayer.cache.SVGAMemoryCache
-import com.opensource.svgaplayer.download.BitmapDownloadInterface
-import com.opensource.svgaplayer.download.BitmapDownloader
 import com.opensource.svgaplayer.download.FileDownloader
 import com.opensource.svgaplayer.url.UrlDecoder
 import com.opensource.svgaplayer.url.UrlDecoderManager
@@ -23,21 +20,25 @@ import java.util.concurrent.ThreadPoolExecutor
  * Date        :2024/2/23
  * Description : SVGAManager 初始化入口
  */
-object SVGAManager : BitmapDownloadInterface {
+object SVGAManager {
 
-    private var bitmapDownloader: BitmapDownloadInterface = BitmapDownloader
+    /** init 时记录，供 clearCache 后重建 http 缓存使用（避免持有外部 Context） */
+    private var appContext: Context? = null
+    private var httpCacheSize: Long = 256L * 1024 * 1024
 
     @JvmOverloads
     @JvmStatic
     fun init(
         context: Context,
-        memoryCacheCount: Int = 16,
+        memoryCacheMaxBytes: Long = SVGAMemoryCache.defaultMaxBytes,
         httpCacheSize: Long = (256 * 1024 * 1024).toLong(),
         logEnabled: Boolean = BuildConfig.DEBUG,
         loggerProxy: ILogger? = null,
         urlDecoder: UrlDecoder? = null,
         threadPoolExecutor: ThreadPoolExecutor? = null
     ) {
+        appContext = context.applicationContext
+        this.httpCacheSize = httpCacheSize
         try {
             val installed = HttpResponseCache.getInstalled()
             if (installed == null) {
@@ -49,9 +50,8 @@ object SVGAManager : BitmapDownloadInterface {
         }
         // 配置cache
         SVGAFileCache.init(context)
-        //修改内存缓存大小
-        SVGAMemoryCache.limitCount = memoryCacheCount
-        SVGABitmapCache.limitCount = memoryCacheCount
+        //修改实体内存缓存字节预算（按实体 bitmap 真实字节数记账，超限 LRU 驱逐）
+        SVGAMemoryCache.defaultMaxBytes = memoryCacheMaxBytes
         //自定义线程池
         threadPoolExecutor?.let {
             SVGAParser.setThreadPoolExecutor(it)
@@ -68,30 +68,6 @@ object SVGAManager : BitmapDownloadInterface {
         loggerProxy?.let { logger ->
             SVGALogger.injectSVGALoggerImp(logger)
         }
-    }
-
-    /**
-     * 设置图片下载器
-     */
-    fun setBitmapDownload(bitmapDownloadInterface: BitmapDownloadInterface) {
-        bitmapDownloader = bitmapDownloadInterface
-    }
-
-    /**
-     * 下载图片并返回bitmap
-     */
-    override suspend fun downloadBitmap(
-        context: Context,
-        url: String,
-        reqWidth: Int,
-        reqHeight: Int
-    ): Bitmap? {
-        return bitmapDownloader.downloadBitmap(
-            context,
-            url,
-            reqWidth,
-            reqHeight
-        )
     }
 
     /**
@@ -163,5 +139,21 @@ object SVGAManager : BitmapDownloadInterface {
         SVGAMemoryCache.INSTANCE.clear()
         SVGABitmapCache.INSTANCE.clear()
         SVGAFileCache.clearCache()
+        reinstallHttpCache()
+    }
+
+    /**
+     * 进程存活期间缓存目录可能被外部整体删除（系统设置清缓存、AppCacheUtils 直删 cacheDir），
+     * 已安装的 HttpResponseCache 会指向不存在的目录导致后续 svga 下载持续失败；
+     * 这里卸载后重装，保证清缓存后同进程内的下载恢复可用
+     */
+    private fun reinstallHttpCache() {
+        val context = appContext ?: return
+        try {
+            HttpResponseCache.getInstalled()?.delete()
+            HttpResponseCache.install(File(context.cacheDir, "http"), httpCacheSize)
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
     }
 }

@@ -1,6 +1,5 @@
 package com.opensource.svgaplayer.download
 
-import android.content.Context
 import android.graphics.Bitmap
 import com.opensource.svgaplayer.bitmap.SVGABitmapFileDecoder
 import com.opensource.svgaplayer.bitmap.SVGABitmapUrlDecoder
@@ -19,15 +18,10 @@ import kotlin.coroutines.suspendCoroutine
  * Date        :2024/7/2
  * Description : Bitmap下载器
  */
-object BitmapDownloader : BitmapDownloadInterface {
+object BitmapDownloader {
     private val downLoadQueue = ConcurrentLinkedQueue<String>()
 
-    override suspend fun downloadBitmap(
-        context: Context,
-        url: String,
-        reqWidth: Int,
-        reqHeight: Int
-    ): Bitmap? {
+    suspend fun downloadBitmap(url: String, reqWidth: Int, reqHeight: Int): Bitmap? {
         val key = SVGABitmapCache.createKey(url, reqWidth, reqHeight)
         // 从内存缓存中获取
         val cacheData = SVGABitmapCache.INSTANCE.getData(key)

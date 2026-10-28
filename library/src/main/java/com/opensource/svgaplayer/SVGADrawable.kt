@@ -5,7 +5,6 @@ import android.graphics.ColorFilter
 import android.graphics.PixelFormat
 import android.graphics.drawable.Drawable
 import android.widget.ImageView
-import com.opensource.svgaplayer.cache.SVGAMemoryCache
 import com.opensource.svgaplayer.drawer.SVGACanvasDrawer
 
 class SVGADrawable(
@@ -98,11 +97,9 @@ class SVGADrawable(
 
     fun clear() {
         unloadSound()
-        //判断是否缓存数据
-        videoItem.getMemoryCacheKey()?.apply {
-            SVGAMemoryCache.INSTANCE.putData(this, videoItem)
-        } ?: videoItem.clear()
-        //清除绘制缓存
+        //实体的回收统一交给 SVGAImageView.releaseVideoItem（末次释放者负责）：
+        //磁盘去重队列会把同一实体派发给多个 view 共享，这里若按旧逻辑对无内存缓存 key 的
+        //实体直接 clear，任一 view 先播完/被回收都会把其他还在播的 view 的 bitmap 一起回收
         drawer.clear()
     }
 

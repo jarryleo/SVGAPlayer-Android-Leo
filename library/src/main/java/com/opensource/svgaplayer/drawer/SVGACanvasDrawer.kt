@@ -16,7 +16,9 @@ import android.graphics.PorterDuffXfermode
 import android.graphics.Rect
 import android.graphics.RectF
 import android.graphics.Shader
+import android.graphics.Typeface
 import android.os.Build
+import android.text.Layout
 import android.text.StaticLayout
 import android.text.TextUtils
 import android.util.Size
@@ -24,6 +26,7 @@ import android.widget.ImageView
 import com.opensource.svgaplayer.SVGADynamicEntity
 import com.opensource.svgaplayer.SVGAVideoEntity
 import com.opensource.svgaplayer.entities.SVGAVideoShapeEntity
+import com.opensource.svgaplayer.entities.SVGAVideoSpriteFrameEntity
 import com.opensource.svgaplayer.utils.maxOf
 import com.opensource.svgaplayer.utils.roundToIntSafe
 import kotlin.math.abs
@@ -44,7 +47,36 @@ internal class SVGACanvasDrawer(
     private val drawTextRtlCache: HashMap<String, Boolean> = hashMapOf()
     private val drawTextMarqueeCache: HashMap<String, Boolean> = hashMapOf()
     private val dynamicImageSizeCache: HashMap<String, Size> = hashMapOf()
+
+    /**
+     * 文本替换用的放大占位图（ALPHA_8）。只存在 drawer 本地，不写回共享实体的 imageMap：
+     * 缓存中的实体被多个 view 复用，运行期改写共享 map 既造成字节记账漂移，
+     * 也让同一实体在不同 view 上互相污染占位尺寸（非主线程读 HashMap 的并发风险）
+     */
+    private val textPlaceHolderCache: HashMap<String, Bitmap> = hashMapOf()
     private val pathCache = PathCache()
+
+    /**
+     * 记录每个 key 的文本位图是由哪份数据渲染的（文本内容/Paint/Layout 实例）。
+     * isTextDirty 只表示"有文本更新过"，不再据此整体清空 drawTextCache：
+     * 源数据未变化的 key 直接复用已渲染位图，只有真正变化的 key 才重建，
+     * 避免频繁更新单个文本（如礼物 combo 数字）时整屏重建 ARGB_8888 位图 + measureText/StaticLayout，
+     * 高频分配触发并发 GC 卡住主线程（线上 ANR 主栈即卡在此路径）
+     */
+    private val drawTextSourceCache: HashMap<String, TextSource> = hashMapOf()
+
+    //逐帧复用的临时对象，避免每帧反复分配加剧 GC 压力
+    private val matrixValues = FloatArray(9)
+    private val drawAreaRect = Rect()
+    private val marqueeLayerBounds = RectF()
+    private val marqueeSrcRect = Rect()
+    private val marqueeDstRect = Rect()
+    private val dstInXfermode = PorterDuffXfermode(PorterDuff.Mode.DST_IN)
+
+    /**
+     * 遮罩层精灵缓存，跨帧复用，每帧 drawFrame 开头 clear
+     */
+    private val matteSprites = HashMap<String, SVGADrawerSprite>()
 
     private var beginIndexList: Array<Boolean>? = null
     private var endIndexList: Array<Boolean>? = null
@@ -88,7 +120,7 @@ internal class SVGACanvasDrawer(
         val sprites = requestFrameSprites(frameIndex)
         // Filter null sprites
         if (sprites.isEmpty()) return
-        val matteSprites = mutableMapOf<String, SVGADrawerSprite>()
+        matteSprites.clear()
         var saveID = -1
         beginIndexList = null
         endIndexList = null
@@ -277,40 +309,46 @@ internal class SVGACanvasDrawer(
 
     /**
      * 获取精灵在所有帧里面的最大尺寸
+     * 直接基于 videoItem.spriteList 计算，不走 requestFrameSprites：
+     * 后者会从对象池取走 sprite 且这里不归还，并伴随每帧一个 ArrayList 的分配，
+     * 首帧替换文本/图片时会瞬时产生 帧数×精灵数 量级的临时对象，加剧主线程 GC 压力。
+     * 结果按 key 缓存，仅在首次调用时执行一次全量扫描
      */
     private fun getSpriteMaxSize(key: String): Size {
         val imageSizeCache = dynamicImageSizeCache
-        val size = imageSizeCache[key]
-        if (size != null) {
-            return size
-        }
+        imageSizeCache[key]?.let { return it }
         var tempSize = Size(0, 0)
-        val frames = videoItem.frames
-        for (i in 0 until frames) {
-            val spriteList = requestFrameSprites(i)
-            spriteList.find { it.imageKey == key }?.let {
-                val s = getSpriteSize(it)
-                if (s.area() > tempSize.area()) {
-                    tempSize = s
-                }
+        val frameCount = videoItem.frames
+        val spriteList = videoItem.spriteList
+        val tempMatrix = Matrix()
+        val matrixArray = FloatArray(9)
+        for (frameIndex in 0 until frameCount) {
+            var matchedFrame: SVGAVideoSpriteFrameEntity? = null
+            for (sprite in spriteList) {
+                if (sprite.imageKey != key) continue
+                val spriteFrames = sprite.frames ?: continue
+                if (frameIndex >= spriteFrames.size) continue
+                val frameEntity = spriteFrames[frameIndex]
+                //与 requestFrameSprites 的可见性过滤保持一致（非遮罩精灵 alpha<=0 不参与）
+                if (frameEntity.alpha <= 0.0) continue
+                matchedFrame = frameEntity
+                break
+            }
+            val frameEntity = matchedFrame ?: continue
+            tempMatrix.reset()
+            tempMatrix.postScale(scaleInfo.scaleFx, scaleInfo.scaleFy)
+            tempMatrix.postTranslate(scaleInfo.tranFx, scaleInfo.tranFy)
+            frameEntity.transform?.let { tempMatrix.preConcat(it) }
+            tempMatrix.getValues(matrixArray)
+            val rqWidth = frameEntity.layout.width * matrixArray[0]
+            val rqHeight = frameEntity.layout.height * matrixArray[4]
+            val size = Size(rqWidth.roundToIntSafe(), rqHeight.roundToIntSafe())
+            if (size.area() > tempSize.area()) {
+                tempSize = size
             }
         }
         imageSizeCache[key] = tempSize
         return tempSize
-    }
-
-    /**
-     * 获取当前帧的当前精灵的尺寸
-     */
-    private fun getSpriteSize(sprite: SVGADrawerSprite): Size {
-        val frameMatrix = shareFrameMatrix(sprite.frameEntity.transform)
-        val ma = floatArrayOf(0f, 0f, 0f, 0f, 0f, 0f, 0f, 0f, 0f)
-        frameMatrix.getValues(ma)
-        val scaleX = ma[0]
-        val scaleY = ma[4]
-        val rqWidth = sprite.frameEntity.layout.width * scaleX
-        val rqHeight = sprite.frameEntity.layout.height * scaleY
-        return Size(rqWidth.roundToIntSafe(), rqHeight.roundToIntSafe())
     }
 
     private fun drawImage(sprite: SVGADrawerSprite, canvas: Canvas) {
@@ -334,13 +372,19 @@ internal class SVGACanvasDrawer(
             (replaceBitmap ?: placeHolderBitmap)
         } else if (isReplaceText(imageKey)) {
             val size = getSpriteMaxSize(bitmapKey) //需要修改为最大尺寸
-            //替换最大尺寸占位图，
+            //替换最大尺寸占位图（本地缓存，不污染共享实体）
             if (placeHolderBitmap != null) {
                 val placeHolderArea = placeHolderBitmap.width * placeHolderBitmap.height
                 if (size.area() > placeHolderArea) {
-                    val bitmap = Bitmap.createBitmap(size.width, size.height, Bitmap.Config.ALPHA_8)
-                    placeHolderBitmap = bitmap
-                    videoItem.imageMap[bitmapKey] = bitmap
+                    val cachedPlaceHolder = textPlaceHolderCache[bitmapKey]
+                    placeHolderBitmap = if (cachedPlaceHolder != null &&
+                        cachedPlaceHolder.width * cachedPlaceHolder.height >= size.area()
+                    ) {
+                        cachedPlaceHolder
+                    } else {
+                        createBitmap(size.width, size.height, Bitmap.Config.ALPHA_8)
+                            ?.also { textPlaceHolderCache[bitmapKey] = it }
+                    }
                 }
             }
             placeHolderBitmap
@@ -378,7 +422,7 @@ internal class SVGACanvasDrawer(
             }
         }
         //绘制文本，每一帧的缩放不一样，文本大小按原图
-        val matrixArray = floatArrayOf(0f, 0f, 0f, 0f, 0f, 0f, 0f, 0f, 0f)
+        val matrixArray = this.matrixValues
         frameMatrix.getValues(matrixArray)
         val x0 = matrixArray[2].roundToIntSafe()
         val y0 = matrixArray[5].roundToIntSafe()
@@ -386,7 +430,9 @@ internal class SVGACanvasDrawer(
         val scaleY1 = matrixArray[4]
         val x1 = (drawingBitmap.width * scaleX1 + x0).roundToIntSafe()
         val y1 = (drawingBitmap.height * scaleY1 + y0).roundToIntSafe()
-        val rect = Rect(x0, y0, x1, y1)
+        //复用字段 Rect：onResponseArea 内部按值拷贝，不持有引用
+        val rect = drawAreaRect
+        rect.set(x0, y0, x1, y1)
         //点击位置
         dynamicItem?.dynamicIClickArea.let {
             it?.get(imageKey)?.onResponseArea(imageKey, x0, y0, x1, y1)
@@ -404,56 +450,89 @@ internal class SVGACanvasDrawer(
     ) {
         val svgaDynamicEntity = dynamicItem
         if (svgaDynamicEntity?.isTextDirty == true) {
-            this.drawTextCache.clear()
             svgaDynamicEntity.isTextDirty = false
+            //文本数据有更新：仅剔除已无数据来源的 key（如 clearDynamicObjects 后的残留），
+            //其余 key 在下方按源数据比对，只有真正变化的才重建位图
+            if (drawTextCache.isNotEmpty()) {
+                val cacheIterator = drawTextCache.entries.iterator()
+                while (cacheIterator.hasNext()) {
+                    if (!svgaDynamicEntity.isDynamicText(cacheIterator.next().key)) {
+                        cacheIterator.remove()
+                    }
+                }
+                val sourceIterator = drawTextSourceCache.entries.iterator()
+                while (sourceIterator.hasNext()) {
+                    if (!svgaDynamicEntity.isDynamicText(sourceIterator.next().key)) {
+                        sourceIterator.remove()
+                    }
+                }
+            }
         }
         val imageKey = sprite.imageKey ?: return
         var textBitmap: Bitmap? = null
         svgaDynamicEntity?.dynamicText?.get(imageKey)?.let { drawingText ->
             svgaDynamicEntity.dynamicTextPaint[imageKey]?.let { drawingTextPaint ->
-                drawTextCache[imageKey]?.let {
-                    textBitmap = it
-                } ?: kotlin.run {
-                    val bitmap = Bitmap.createBitmap(
-                        drawingBitmap.width, drawingBitmap.height, Bitmap.Config.ARGB_8888
+                val source = TextSource(
+                    text = drawingText,
+                    paint = drawingTextPaint,
+                    textSize = drawingTextPaint.textSize,
+                    color = drawingTextPaint.color,
+                    typeface = drawingTextPaint.typeface
+                )
+                if (textBitmap == null) {
+                    textBitmap = cachedTextBitmap(imageKey, source)
+                }
+                if (textBitmap == null) {
+                    val bitmap = reuseOrCreateTextBitmap(
+                        imageKey, drawingBitmap.width, drawingBitmap.height
                     )
-                    textBitmap = bitmap
-                    val drawRect = Rect(0, 0, drawingBitmap.width, drawingBitmap.height)
-                    val textCanvas = Canvas(bitmap)
-                    drawingTextPaint.isAntiAlias = true
-                    val fontMetrics = drawingTextPaint.fontMetrics
-                    val top = fontMetrics.top
-                    val bottom = fontMetrics.bottom
-                    val baseLineY = drawRect.centerY() - top / 2 - bottom / 2
-                    val left = drawRect.centerX().toFloat()
-                    textCanvas.drawText(
-                        drawingText, left, baseLineY, drawingTextPaint
-                    )
-                    drawTextCache.put(imageKey, bitmap)
+                    if (bitmap != null) {
+                        textBitmap = bitmap
+                        val drawRect = Rect(0, 0, drawingBitmap.width, drawingBitmap.height)
+                        val textCanvas = Canvas(bitmap)
+                        drawingTextPaint.isAntiAlias = true
+                        val fontMetrics = drawingTextPaint.fontMetrics
+                        val top = fontMetrics.top
+                        val bottom = fontMetrics.bottom
+                        val baseLineY = drawRect.centerY() - top / 2 - bottom / 2
+                        val left = drawRect.centerX().toFloat()
+                        textCanvas.drawText(
+                            drawingText, left, baseLineY, drawingTextPaint
+                        )
+                        drawTextCache.put(imageKey, bitmap)
+                        drawTextSourceCache.put(imageKey, source)
+                    }
                 }
             }
         }
 
         svgaDynamicEntity?.dynamicBoringLayoutText?.get(imageKey)?.let { dl ->
-            drawTextCache[imageKey]?.let {
-                textBitmap = it
-            } ?: kotlin.run {
+            val source = TextSource(layout = dl)
+            if (textBitmap == null) {
+                textBitmap = cachedTextBitmap(imageKey, source)
+            }
+            if (textBitmap == null) {
                 dl.paint.isAntiAlias = true
-                val bitmap = Bitmap.createBitmap(
-                    drawingBitmap.width, drawingBitmap.height, Bitmap.Config.ARGB_8888
+                val bitmap = reuseOrCreateTextBitmap(
+                    imageKey, drawingBitmap.width, drawingBitmap.height
                 )
-                textBitmap = bitmap
-                val textCanvas = Canvas(bitmap)
-                textCanvas.translate(0f, ((drawingBitmap.height - dl.height) / 2).toFloat())
-                dl.draw(textCanvas)
-                drawTextCache.put(imageKey, bitmap)
+                if (bitmap != null) {
+                    textBitmap = bitmap
+                    val textCanvas = Canvas(bitmap)
+                    textCanvas.translate(0f, ((drawingBitmap.height - dl.height) / 2).toFloat())
+                    dl.draw(textCanvas)
+                    drawTextCache.put(imageKey, bitmap)
+                    drawTextSourceCache.put(imageKey, source)
+                }
             }
         }
 
         svgaDynamicEntity?.dynamicStaticLayoutText?.get(imageKey)?.let {
-            drawTextCache[imageKey]?.let {
-                textBitmap = it
-            } ?: kotlin.run {
+            val source = TextSource(layout = it)
+            if (textBitmap == null) {
+                textBitmap = cachedTextBitmap(imageKey, source)
+            }
+            if (textBitmap == null) {
                 it.paint.isAntiAlias = true
                 val lineMax = try {
                     val field =
@@ -506,37 +585,41 @@ internal class SVGACanvasDrawer(
                         (drawingBitmap.height.toFloat() / layout.height.maxOf(1)) * textScale //内边距
                     val bitmapWidth = (targetWidth * scaleY).roundToIntSafe()
                     val bitmapHeight = drawingBitmap.height
-                    val bitmap = Bitmap.createBitmap(
-                        bitmapWidth, bitmapHeight, Bitmap.Config.ARGB_8888
-                    )
-                    textBitmap = bitmap
-                    val textCanvas = Canvas(bitmap)
-                    textCanvas.scale(scaleY, scaleY)
-                    layout.draw(textCanvas)
-                    drawTextCache[imageKey] = bitmap
-                } else {
-                    val bitmap = Bitmap.createBitmap(
-                        drawingBitmap.width, drawingBitmap.height, Bitmap.Config.ARGB_8888
-                    )
-                    textBitmap = bitmap
-                    val textCanvas = Canvas(bitmap)
-                    val textScale = svgaDynamicEntity.dynamicTextScale[imageKey] ?: 1f
-                    val scale =
-                        drawingBitmap.height * 1f / layout.height.maxOf(1) * textScale //内边距
-                    if (layout.lineCount == 1
-                        && textWidth * scale <= drawingBitmap.width
-                        && layout.height * scale <= drawingBitmap.height
-                    ) {
-                        //单行文本填充，不受字体大小控制
-                        val tansX = -(layout.width * scale - drawingBitmap.width) / 2f
-                        val tansY = -(layout.height * scale - drawingBitmap.height) / 2f
-                        textCanvas.translate(tansX, tansY)
-                        textCanvas.scale(scale, scale)
-                    } else {
-                        textCanvas.translate(0f, (drawingBitmap.height - layout.height) / 2f)
+                    val bitmap = reuseOrCreateTextBitmap(imageKey, bitmapWidth, bitmapHeight)
+                    if (bitmap != null) {
+                        textBitmap = bitmap
+                        val textCanvas = Canvas(bitmap)
+                        textCanvas.scale(scaleY, scaleY)
+                        layout.draw(textCanvas)
+                        drawTextCache[imageKey] = bitmap
+                        drawTextSourceCache[imageKey] = source
                     }
-                    layout.draw(textCanvas)
-                    drawTextCache[imageKey] = bitmap
+                } else {
+                    val bitmap = reuseOrCreateTextBitmap(
+                        imageKey, drawingBitmap.width, drawingBitmap.height
+                    )
+                    if (bitmap != null) {
+                        textBitmap = bitmap
+                        val textCanvas = Canvas(bitmap)
+                        val textScale = svgaDynamicEntity.dynamicTextScale[imageKey] ?: 1f
+                        val scale =
+                            drawingBitmap.height * 1f / layout.height.maxOf(1) * textScale //内边距
+                        if (layout.lineCount == 1
+                            && textWidth * scale <= drawingBitmap.width
+                            && layout.height * scale <= drawingBitmap.height
+                        ) {
+                            //单行文本填充，不受字体大小控制
+                            val tansX = -(layout.width * scale - drawingBitmap.width) / 2f
+                            val tansY = -(layout.height * scale - drawingBitmap.height) / 2f
+                            textCanvas.translate(tansX, tansY)
+                            textCanvas.scale(scale, scale)
+                        } else {
+                            textCanvas.translate(0f, (drawingBitmap.height - layout.height) / 2f)
+                        }
+                        layout.draw(textCanvas)
+                        drawTextCache[imageKey] = bitmap
+                        drawTextSourceCache[imageKey] = source
+                    }
                 }
             }
         }
@@ -568,6 +651,48 @@ internal class SVGACanvasDrawer(
         }
     }
 
+    private fun createBitmap(width: Int, height: Int, config: Bitmap.Config): Bitmap? {
+        if (width <= 0 || height <= 0) {
+            return null
+        }
+        return runCatching {
+            Bitmap.createBitmap(
+                width, height, config
+            )
+        }.getOrNull()
+    }
+
+    /**
+     * 缓存命中且渲染源数据未变化时，直接复用已渲染的文本位图
+     */
+    private fun cachedTextBitmap(imageKey: String, source: TextSource): Bitmap? {
+        if (drawTextSourceCache[imageKey] != source) {
+            return null
+        }
+        val cached = drawTextCache[imageKey] ?: return null
+        if (cached.isRecycled) return null
+        return cached
+    }
+
+    /**
+     * 重建文本位图时优先复用旧位图内存（擦除重绘），
+     * 尺寸一致时不再新分配 ARGB_8888，消除文本高频更新场景下的位图分配/GC 抖动。
+     * 注：绘制与擦除都发生在主线程同一帧的记录阶段，不存在与 RenderThread 的并发冲突
+     */
+    private fun reuseOrCreateTextBitmap(imageKey: String, width: Int, height: Int): Bitmap? {
+        if (width <= 0 || height <= 0) {
+            return null
+        }
+        val cached = drawTextCache[imageKey]
+        if (cached != null && !cached.isRecycled
+            && cached.width == width && cached.height == height
+        ) {
+            cached.eraseColor(Color.TRANSPARENT)
+            return cached
+        }
+        return createBitmap(width, height, Bitmap.Config.ARGB_8888)
+    }
+
     /**
      * 绘制跑马灯
      */
@@ -579,12 +704,13 @@ internal class SVGACanvasDrawer(
         matrix: Matrix,
         paint: Paint
     ) {
-        val matrixArray = floatArrayOf(0f, 0f, 0f, 0f, 0f, 0f, 0f, 0f, 0f)
+        val matrixArray = this.matrixValues
         matrix.getValues(matrixArray)
         val scaleX = matrixArray[0]
         //val scaleY = matrixArray[4]
+        marqueeLayerBounds.set(rect)
         val layer = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
-            canvas.saveLayer(RectF(rect), paint)
+            canvas.saveLayer(marqueeLayerBounds, paint)
         } else {
             canvas.save()
         }
@@ -612,13 +738,15 @@ internal class SVGACanvasDrawer(
         val srcEnd = if (isRtl) srcStart - srcWidth else srcStart + srcWidth
         //绘制原始文本 还未显示到结尾就是全部文本
         if (cutWidth > 0) {
-            val srcRect = Rect(
+            val srcRect = marqueeSrcRect
+            srcRect.set(
                 if (isRtl) srcEnd else srcStart,
                 0,
                 if (isRtl) srcStart else srcEnd,
                 bitmap.height
             )
-            val destRect = Rect(
+            val destRect = marqueeDstRect
+            destRect.set(
                 if (isRtl) rect.right - cutWidth else rect.left,
                 rect.top,
                 if (isRtl) rect.right else rect.left + cutWidth,
@@ -636,20 +764,20 @@ internal class SVGACanvasDrawer(
         val lastCutWidth = minOf(leftSpace - spaceWidth, rect.width()) //右侧需要绘制的文本宽度
         val lastWidth = (lastCutWidth.toFloat() / scaleX).roundToIntSafe()
         if (leftSpace > spaceWidth) { //如果右边空余超过一半，绘制右边文本
-            val srcRect =
-                Rect(
-                    if (isRtl) bitmap.width - lastWidth else 0,
-                    0,
-                    if (isRtl) bitmap.width else lastWidth,
-                    bitmap.height
-                )
-            val dstRect =
-                Rect(
-                    if (isRtl) rect.left else rect.left + rect.width() - lastCutWidth,
-                    rect.top,
-                    if (isRtl) rect.left + lastCutWidth else rect.right,
-                    rect.bottom
-                )
+            val srcRect = marqueeSrcRect
+            srcRect.set(
+                if (isRtl) bitmap.width - lastWidth else 0,
+                0,
+                if (isRtl) bitmap.width else lastWidth,
+                bitmap.height
+            )
+            val dstRect = marqueeDstRect
+            dstRect.set(
+                if (isRtl) rect.left else rect.left + rect.width() - lastCutWidth,
+                rect.top,
+                if (isRtl) rect.left + lastCutWidth else rect.right,
+                rect.bottom
+            )
             canvas.drawBitmap(bitmap, srcRect, dstRect, paint)
         }
         if (lastCutWidth >= rect.width()) {
@@ -660,7 +788,7 @@ internal class SVGACanvasDrawer(
         val isDrawLinearGradient = rect.width() > marqueeLinearGradientWidth * 2
         val isWait = offsetX < 0
         if (isDrawLinearGradient) {
-            paint.xfermode = PorterDuffXfermode(PorterDuff.Mode.DST_IN)
+            paint.xfermode = dstInXfermode
             if (!isWait || isRtl) {
                 paint.shader = marqueeLeftLinearGradient
                 canvas.translate(rect.left.toFloat(), rect.top.toFloat())
@@ -837,6 +965,13 @@ internal class SVGACanvasDrawer(
             it.recycle()
         }
         drawTextCache.clear()
+        textPlaceHolderCache.values.filter {
+            !it.isRecycled
+        }.forEach {
+            it.recycle()
+        }
+        textPlaceHolderCache.clear()
+        drawTextSourceCache.clear()
     }
 
     class ShareValues {
@@ -848,6 +983,7 @@ internal class SVGACanvasDrawer(
         private val sharedMatrix2 = Matrix()
 
         private val shareMattePaint = Paint()
+        private val matteDstInXfermode = PorterDuffXfermode(PorterDuff.Mode.DST_IN)
         private var shareMatteCanvas: Canvas? = null
         private var sharedMatteBitmap: Bitmap? = null
 
@@ -877,7 +1013,7 @@ internal class SVGACanvasDrawer(
         }
 
         fun shareMattePaint(): Paint {
-            shareMattePaint.setXfermode(PorterDuffXfermode(PorterDuff.Mode.DST_IN))
+            shareMattePaint.xfermode = matteDstInXfermode
             return shareMattePaint
         }
 
@@ -886,7 +1022,7 @@ internal class SVGACanvasDrawer(
         }
 
         fun shareMatteCanvas(width: Int, height: Int): Canvas {
-            if (shareMatteCanvas == null) {
+            if (shareMatteCanvas == null && width > 0 && height > 0) {
                 sharedMatteBitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ALPHA_8)
 //                shareMatteCanvas = Canvas(sharedMatteBitmap)
             }
@@ -898,6 +1034,19 @@ internal class SVGACanvasDrawer(
             return Canvas(bitmap)
         }
     }
+
+    /**
+     * 文本位图的渲染来源快照。Paint/Layout 未重写 equals，按实例引用比较：
+     * 只要文本内容、Paint 实例及其关键属性、Layout 实例没变，已渲染位图即可复用
+     */
+    private data class TextSource(
+        val text: String? = null,
+        val paint: Paint? = null,
+        val textSize: Float = 0f,
+        val color: Int = 0,
+        val typeface: Typeface? = null,
+        val layout: Layout? = null
+    )
 
     class PathCache {
 
