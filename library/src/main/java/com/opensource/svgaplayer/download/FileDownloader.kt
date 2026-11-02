@@ -1,6 +1,7 @@
 package com.opensource.svgaplayer.download
 
 import android.net.http.HttpResponseCache
+import com.opensource.svgaplayer.bitmap.SVGABitmapUrlDecoder
 import com.opensource.svgaplayer.cache.SVGAFileCache
 import com.opensource.svgaplayer.coroutine.SvgaCoroutineManager
 import com.opensource.svgaplayer.utils.log.LogUtils
@@ -12,6 +13,13 @@ import java.io.FileOutputStream
 import java.io.InputStream
 import java.net.HttpURLConnection
 import java.net.URL
+import java.security.SecureRandom
+import java.security.cert.X509Certificate
+import javax.net.ssl.HostnameVerifier
+import javax.net.ssl.HttpsURLConnection
+import javax.net.ssl.SSLContext
+import javax.net.ssl.TrustManager
+import javax.net.ssl.X509TrustManager
 
 open class FileDownloader {
 
@@ -53,6 +61,11 @@ open class FileDownloader {
                 }
 
                 (url.openConnection() as? HttpURLConnection)?.let {
+                    // 如果是 HTTPS 连接，设置 SSL 忽略证书验证
+                    if (it is HttpsURLConnection) {
+                        it.sslSocketFactory = SVGABitmapUrlDecoder.sslContext.socketFactory
+                        it.hostnameVerifier = SVGABitmapUrlDecoder.hostnameVerifier
+                    }
                     it.connectTimeout = TIMEOUT
                     it.readTimeout = TIMEOUT
                     it.requestMethod = "GET"
