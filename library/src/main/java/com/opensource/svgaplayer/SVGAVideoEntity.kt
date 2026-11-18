@@ -256,18 +256,21 @@ class SVGAVideoEntity {
             if (fileTag[0].toInt() == 73 && fileTag[1].toInt() == 68 && fileTag[2].toInt() == 51) {
                 return@forEach
             }
-            val filePath = generateBitmapFilePath(entry.value.utf8(), entry.key)
-            createBitmap(byteArray, filePath)?.let { bitmap ->
+            createBitmap(byteArray, entry.key)?.let { bitmap ->
                 LogUtils.debug(TAG, "createBitmap key = ${entry.key}")
                 imageMap[entry.key] = bitmap
             }
         }
     }
 
-    private fun createBitmap(byteArray: ByteArray, filePath: String): Bitmap? {
+    private fun createBitmap(byteArray: ByteArray, imageKey: String): Bitmap? {
         val bitmap =
             SVGABitmapByteArrayDecoder.decodeBitmapFrom(byteArray, mFrameWidth, mFrameHeight)
-        return bitmap ?: createBitmap(filePath)
+        if (bitmap != null) {
+            return bitmap
+        }
+        val filePath = generateBitmapFilePath(String(byteArray, Charsets.UTF_8), imageKey)
+        return createBitmap(filePath)
     }
 
     private fun resetSprites(json: JSONObject) {
