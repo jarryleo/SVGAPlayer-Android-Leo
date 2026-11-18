@@ -67,15 +67,21 @@ class SVGADynamicEntity(val context: Context) {
 
     internal var isTextDirty = false
 
-    /** 判断是否由SVGA内部自动释放Bitmap（使用Glide时候如果SVGA内部释放掉Bitmap会造成崩溃） */
-    private var isAutoRecycleBitmap = true
+    /**
+     * 标记 dynamicImage 中各 key 的 bitmap 是否可由库内回收（per-key 精准分流）
+     * false：外部持有的 bitmap（[setDynamicImage] 直接传入，或外部下载器返回，可能被外部 view 共享，
+     * 如 Glide 缓存），库内 recycle 会导致外部绘制崩溃
+     * true：库内解码/派生的 bitmap（默认下载器、文件、asset、resId，或 transform 产生的新对象）
+     */
+    private var dynamicImageRecyclable: ConcurrentHashMap<String, Boolean> = ConcurrentHashMap()
 
     fun setHidden(value: Boolean, forKey: String) {
         this.dynamicHidden[forKey] = value
     }
 
     fun setDynamicImage(bitmap: Bitmap, forKey: String) {
-        isAutoRecycleBitmap = false //外部设置的bitmap不自动释放
+        //外部设置的bitmap不自动释放（可能被外部view共享）
+        this.dynamicImageRecyclable[forKey] = false
         this.dynamicImage[forKey] = bitmap
     }
 
@@ -141,6 +147,7 @@ class SVGADynamicEntity(val context: Context) {
                 return value
             } else {
                 dynamicImage.remove(forKey)
+                dynamicImageRecyclable.remove(forKey)
             }
         }
         val url = dynamicImageUrl[forKey]
@@ -155,15 +162,20 @@ class SVGADynamicEntity(val context: Context) {
             }
             val job = SvgaCoroutineManager.launchIo {
                 var bitmap: Bitmap? = null
+                //bitmap是否可由库内回收：文件/asset/resId均为库内解码，默认可回收
+                var recyclable = true
                 if (url != null) {
                     val realUrl =
                         UrlDecoderManager.getUrlDecoder().decodeImageUrl(url, width, height)
-                    bitmap = if (SourceUtil.isUrl(realUrl)) {
-                        BitmapDownloader.bitmapDownloader.downloadBitmap(context, realUrl, width, height)
+                    if (SourceUtil.isUrl(realUrl)) {
+                        bitmap = BitmapDownloader.bitmapDownloader.downloadBitmap(context, realUrl, width, height)
+                        //外部下载器返回的bitmap所有权归调用方（可能被外部view共享，如Glide缓存），
+                        //仅默认内置下载器解码的bitmap归库内管理
+                        recyclable = BitmapDownloader.bitmapDownloader is BitmapDownloader
                     } else if (SourceUtil.isFilePath(realUrl)) {
-                        SVGABitmapFileDecoder.decodeBitmapFrom(realUrl, width, height)
+                        bitmap = SVGABitmapFileDecoder.decodeBitmapFrom(realUrl, width, height)
                     } else {
-                        SVGABitmapInputStreamDecoder.decodeBitmapFrom(
+                        bitmap = SVGABitmapInputStreamDecoder.decodeBitmapFrom(
                             context.assets.open(realUrl),
                             width,
                             height
@@ -179,9 +191,14 @@ class SVGADynamicEntity(val context: Context) {
                         val transformationBitmap =
                             bitmapTransformation.transform(bitmap, width, height)
                         dynamicImage[forKey] = transformationBitmap ?: bitmap
+                        //transform返回新对象时视为移交库管理（源bitmap从不由库回收，维持原行为）；
+                        //返回null或原对象时沿用来源的可回收性（外部共享对象不被回收）
+                        recyclable =
+                            (transformationBitmap !== null && transformationBitmap !== bitmap) || recyclable
                     } else {
                         dynamicImage[forKey] = bitmap
                     }
+                    dynamicImageRecyclable[forKey] = recyclable
                     dynamicImageJob.remove(forKey)
                     invalidateCallback.invoke()
                 }
@@ -310,14 +327,14 @@ class SVGADynamicEntity(val context: Context) {
         }
         this.isTextDirty = true
         this.dynamicHidden.clear()
-        if (isAutoRecycleBitmap) {
-            this.dynamicImage.filter {
-                !it.value.isRecycled
-            }.forEach {
-                it.value.recycle()
-            }
+        //仅回收标记为库内所有的bitmap；外部传入/外部下载器返回的bitmap可能被外部view共享，不可回收
+        this.dynamicImage.filter {
+            dynamicImageRecyclable[it.key] == true && !it.value.isRecycled
+        }.forEach {
+            it.value.recycle()
         }
         this.dynamicImage.clear()
+        this.dynamicImageRecyclable.clear()
         this.dynamicImageUrl.clear()
         this.dynamicImageResId.clear()
         this.dynamicImageJob.clear()
