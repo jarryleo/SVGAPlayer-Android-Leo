@@ -5,6 +5,8 @@ import android.net.http.HttpResponseCache
 import com.opensource.svgaplayer.cache.SVGABitmapCache
 import com.opensource.svgaplayer.cache.SVGAFileCache
 import com.opensource.svgaplayer.cache.SVGAMemoryCache
+import com.opensource.svgaplayer.download.BitmapDownloadInterface
+import com.opensource.svgaplayer.download.BitmapDownloader
 import com.opensource.svgaplayer.download.FileDownloader
 import com.opensource.svgaplayer.url.UrlDecoder
 import com.opensource.svgaplayer.url.UrlDecoderManager
@@ -35,6 +37,7 @@ object SVGAManager {
         logEnabled: Boolean = BuildConfig.DEBUG,
         loggerProxy: ILogger? = null,
         urlDecoder: UrlDecoder? = null,
+        bitmapDownloader: BitmapDownloadInterface? = null,
         threadPoolExecutor: ThreadPoolExecutor? = null
     ) {
         appContext = context.applicationContext
@@ -59,6 +62,10 @@ object SVGAManager {
         //初始化url解码器
         urlDecoder?.let {
             UrlDecoderManager.setUrlDecoder(it)
+        }
+        //bitmap外部下载器
+        bitmapDownloader?.let {
+            BitmapDownloader.bitmapDownloader = bitmapDownloader
         }
         //初始化
         SVGAParser.init(context)

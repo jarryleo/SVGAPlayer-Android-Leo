@@ -159,7 +159,7 @@ class SVGADynamicEntity(val context: Context) {
                     val realUrl =
                         UrlDecoderManager.getUrlDecoder().decodeImageUrl(url, width, height)
                     bitmap = if (SourceUtil.isUrl(realUrl)) {
-                        BitmapDownloader.downloadBitmap(realUrl, width, height)
+                        BitmapDownloader.bitmapDownloader.downloadBitmap(context, realUrl, width, height)
                     } else if (SourceUtil.isFilePath(realUrl)) {
                         SVGABitmapFileDecoder.decodeBitmapFrom(realUrl, width, height)
                     } else {
